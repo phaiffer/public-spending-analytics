@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: int_spending_stage_events
+    description: "Unified spending-stage events prepared for fact modeling. Disabled until staging models are implemented."
+    columns:
+      - name: spending_event_id
+        description: "Surrogate or deterministic event identifier."
+      - name: spending_stage
+        description: "Commitment, liquidation, or payment."
+      - name: amount_brl
+        description: "Event amount in Brazilian reais."

@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: stg_portal_transparencia__spending_documents
+    description: "Source-aligned spending document records from Portal da Transparencia. Disabled until real files are profiled."
+    columns:
+      - name: source_file_name
+        description: "Original source file name."
+      - name: spending_document_id
+        description: "Document identifier retained from the source."
+      - name: spending_stage
+        description: "Normalized spending stage."
+        tests:
+          - accepted_values:
+              values: ["commitment", "liquidation", "payment"]
+      - name: amount_brl
+        description: "Spending amount in Brazilian reais."

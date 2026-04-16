@@ -1,0 +1,22 @@
+[project]
+name = "Brazilian Federal Public Spending Analytics"
+source_system = "Portal da Transparencia"
+default_language = "en"
+
+[paths]
+raw_data = "data/raw"
+staging_data = "data/staging"
+curated_data = "data/curated"
+
+[duckdb]
+database_path = "data/curated/gov_spending.duckdb"
+
+[sources.portal_transparencia]
+base_download_page = "https://portaldatransparencia.gov.br/download-de-dados"
+spending_documents_page = "https://portaldatransparencia.gov.br/download-de-dados/despesas"
+recommended_raw_layout = "data/raw/portal_transparencia/despesas/YYYY/MM/"
+
+[modeling]
+default_currency = "BRL"
+planned_fact_table = "fact_public_spending"
+planned_spending_stages = ["commitment", "liquidation", "payment"]

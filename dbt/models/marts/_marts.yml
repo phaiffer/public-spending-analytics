@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fact_public_spending
+    description: "Future core spending fact table by spending-stage event."
+    columns:
+      - name: spending_event_id
+        description: "Unique spending-stage event identifier."
+        tests:
+          - unique
+          - not_null
+      - name: spending_stage
+        description: "Commitment, liquidation, or payment."
+        tests:
+          - accepted_values:
+              values: ["commitment", "liquidation", "payment"]
+      - name: amount_brl
+        description: "Amount in Brazilian reais."
+        tests:
+          - not_null
+
+  - name: dim_spending_stage
+    description: "Controlled spending-stage dimension."
+    columns:
+      - name: spending_stage
+        description: "English analytical spending stage key."
+        tests:
+          - unique
+          - not_null

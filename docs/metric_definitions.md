@@ -1,0 +1,218 @@
+# Metric Definitions
+
+This document defines the intended MVP metrics for Brazilian federal public spending analytics.
+
+The definitions below are analytical targets. They must be validated against real source columns and source dictionaries before being treated as final.
+
+## Core Concepts
+
+### Commitment
+
+Commitment represents spending that the government has formally reserved for a specific purpose or obligation.
+
+Portuguese source concept: `empenho`.
+
+Candidate metric:
+
+```text
+committed_amount_brl = sum(amount_brl where spending_stage = 'commitment')
+```
+
+### Liquidation
+
+Liquidation represents spending recognized as delivered, fulfilled, or payable according to public accounting rules.
+
+Portuguese source concept: `liquidacao`.
+
+Candidate metric:
+
+```text
+liquidated_amount_brl = sum(amount_brl where spending_stage = 'liquidation')
+```
+
+### Payment
+
+Payment represents spending effectively paid.
+
+Portuguese source concept: `pagamento`.
+
+Candidate metric:
+
+```text
+paid_amount_brl = sum(amount_brl where spending_stage = 'payment')
+```
+
+## MVP KPIs
+
+### Committed Amount
+
+Total committed value in Brazilian reais.
+
+Formula:
+
+```text
+sum(committed_amount_brl)
+```
+
+Expected dimensions:
+
+- date
+- government body
+- beneficiary, where available
+- fiscal year
+
+### Liquidated Amount
+
+Total liquidated value in Brazilian reais.
+
+Formula:
+
+```text
+sum(liquidated_amount_brl)
+```
+
+Expected dimensions:
+
+- date
+- government body
+- beneficiary, where available
+- fiscal year
+
+### Paid Amount
+
+Total paid value in Brazilian reais.
+
+Formula:
+
+```text
+sum(paid_amount_brl)
+```
+
+Expected dimensions:
+
+- date
+- government body
+- beneficiary
+- fiscal year
+
+### Liquidation Rate
+
+Share of committed amount that has been liquidated.
+
+Formula:
+
+```text
+liquidation_rate = liquidated_amount_brl / committed_amount_brl
+```
+
+Rules:
+
+- Return null when committed amount is zero or unavailable.
+- Do not compare across incompatible grains.
+
+### Payment Rate
+
+Share of committed amount that has been paid.
+
+Formula:
+
+```text
+payment_rate = paid_amount_brl / committed_amount_brl
+```
+
+Rules:
+
+- Return null when committed amount is zero or unavailable.
+- Interpret carefully when commitments and payments are not linked one-to-one.
+
+### Open Commitment Amount
+
+Committed value not yet paid.
+
+Formula:
+
+```text
+open_commitment_amount_brl = committed_amount_brl - paid_amount_brl
+```
+
+Rules:
+
+- Only calculate when commitment and payment values are aligned by a defensible key or aggregation grain.
+- Avoid presenting this as unpaid debt without accounting validation.
+
+### Beneficiary Concentration
+
+Share of paid amount represented by the largest beneficiaries.
+
+Example formula:
+
+```text
+top_n_beneficiary_share = paid_amount_brl for top N beneficiaries / total_paid_amount_brl
+```
+
+Rules:
+
+- Beneficiary identifiers must be normalized.
+- Missing, masked, or list-based beneficiaries should be documented separately.
+
+## Standard Dimensions
+
+### Date
+
+Planned fields:
+
+- `date_key`
+- `date`
+- `year`
+- `month`
+- `quarter`
+- `fiscal_year`
+
+### Government Body
+
+Planned fields:
+
+- `government_body_id`
+- `government_body_name`
+- `superior_body_id`, if available
+- `superior_body_name`, if available
+
+### Beneficiary
+
+Planned fields:
+
+- `beneficiary_id`
+- `beneficiary_name`
+- `beneficiary_type`, if derivable
+
+Important caveat:
+
+Some payment structures may involve final beneficiaries, creditor lists, or supporting list files. The MVP should avoid flattening these relationships until the source files are profiled.
+
+### Spending Stage
+
+Controlled values:
+
+- `commitment`
+- `liquidation`
+- `payment`
+
+Source labels should be mapped into these English analytical values.
+
+## Data Quality Expectations
+
+Initial quality checks should include:
+
+- required document identifiers are not null
+- spending stage values are accepted
+- amount fields parse as decimals
+- date fields parse as dates
+- source file metadata is retained
+- duplicate handling rules are explicit
+
+## Limitations
+
+- These definitions are not a substitute for official accounting interpretation.
+- Source dictionaries must be reviewed before final implementation.
+- Some metrics may require document linkage tables.
+- Payments to final beneficiaries may require separate modeling from direct payment documents.

@@ -1,0 +1,4 @@
+spending_stage,source_label_pt,stage_order,description
+commitment,empenho,1,Spending formally committed by the government
+liquidation,liquidacao,2,Spending recognized as delivered or payable
+payment,pagamento,3,Spending effectively paid

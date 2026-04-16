@@ -1,0 +1,7 @@
+gov_spending_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "../data/curated/gov_spending.duckdb"
+      threads: 4
