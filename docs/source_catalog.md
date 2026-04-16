@@ -1,6 +1,6 @@
 # Source Catalog
 
-This catalog documents the intended official data sources for the MVP. It does not claim that any real files have already been downloaded or validated in this repository.
+This catalog documents the intended official data sources for the MVP. It distinguishes confirmed source-page information from observations that require a manually downloaded file.
 
 Source information was checked from Portal da Transparencia public pages during repository foundation work on 2026-04-16.
 
@@ -54,6 +54,39 @@ Known caveats:
 - Liquidation and payment files may reference impacted commitments, so the final relationship model should not assume a simple one-to-one document flow.
 - File sizes can be large; ingestion should support chunked reads in later implementation.
 
+### Current Profiling Status
+
+No real `Despesas` CSV file is currently present under `data/raw/` in this working tree. Because of that, the repository does not yet commit observed source columns for this dataset.
+
+Confirmed from the repository state:
+
+- The raw-data folder exists and is gitignored for real source files.
+- The profiling command can discover and profile one manually downloaded CSV file.
+- The dbt spending-document models remain scaffolded and disabled.
+
+Still provisional:
+
+- actual source columns
+- source column data types
+- row counts for a selected file
+- null-heavy fields
+- reliable document keys
+- relationship between header, item, impacted commitment, payment, and final beneficiary files
+- final fact grain
+
+After running `gov-spending profile-raw-file`, summarize the observed columns here before implementing ingestion mappings.
+
+Suggested observed-column documentation pattern:
+
+```text
+Profiled file: <file name>
+Profile artifact: profiling/<file stem>_profile.json
+Row count: <row count from profile>
+Column count: <column count from profile>
+Observed columns:
+- <source column> -> <normalized column> -> <candidate canonical field or none>
+```
+
 ## MVP Candidate Dataset 2
 
 ### Execucao da despesa
@@ -82,6 +115,7 @@ For the MVP:
 3. Do not commit raw files to git.
 4. Document the download date, selected filters, and source page in future metadata files.
 5. Avoid API-first design until the bulk-file model is working.
+6. Run local profiling before committing schema-specific ingestion logic.
 
 ## Raw File Naming Guidance
 
@@ -100,6 +134,28 @@ data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 This pattern is guidance only. The ingestion code should eventually read source configuration rather than assume every file will arrive perfectly organized.
+
+## Canonical Column Mapping Approach
+
+Column mapping is intentionally two-step:
+
+1. Normalize source labels to ASCII `snake_case`.
+2. Suggest candidate canonical fields from normalized labels.
+
+Current canonical candidates:
+
+- `spending_document_id`
+- `spending_date`
+- `fiscal_year`
+- `government_body_id`
+- `government_body_name`
+- `beneficiary_id`
+- `beneficiary_name`
+- `amount_brl`
+
+The profiler writes these suggestions under `canonical_column_suggestions`. These suggestions are not authoritative; they must be reviewed against source dictionaries and sampled records.
+
+The `spending_stage` field is expected to come from the file context or source-specific transformation, not necessarily from a raw column.
 
 ## Future Sources
 

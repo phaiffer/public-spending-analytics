@@ -59,6 +59,8 @@ The MVP is a local reproducible pipeline foundation that can eventually:
 
 The current repository foundation intentionally does not download real data or claim completed validation against production files.
 
+The next step after downloading one official CSV file manually is source profiling. Profiling inspects the real file structure before ingestion and dbt modeling decisions are finalized.
+
 ## Target Users
 
 - **Data engineering recruiters and reviewers** who want to see practical modeling, documentation, and local data pipeline design.
@@ -94,6 +96,9 @@ Official bulk CSV downloads
         |
         v
 data/raw/
+        |
+        v
+Source profiling
         |
         v
 Python ingestion and normalization
@@ -207,11 +212,58 @@ Create a local DuckDB database placeholder:
 gov-spending bootstrap-duckdb
 ```
 
-When real CSV files are downloaded in a later phase, place them under `data/raw/`. Raw and generated data files are intentionally ignored by git.
+## Source Profiling Workflow
+
+This repository does not download Portal da Transparencia files automatically. Download one official spending CSV manually and keep the original file name.
+
+Recommended Windows folder pattern:
+
+```powershell
+New-Item -ItemType Directory -Force -Path data\raw\portal_transparencia\despesas\2025\01
+```
+
+Place one downloaded file under that folder, for example:
+
+```text
+data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
+```
+
+List discovered raw CSV files:
+
+```powershell
+gov-spending list-raw-files
+```
+
+Profile one selected file:
+
+```powershell
+gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```
+
+Or select by a filename substring when exactly one file matches:
+
+```powershell
+gov-spending profile-raw-file --pattern Pagamento
+```
+
+The profiling command writes a JSON summary under `profiling/` by default. The output includes:
+
+- detected encoding and delimiter
+- row count
+- source columns
+- normalized column names
+- sample records
+- sample-based type inference
+- null-heavy columns
+- heuristic canonical column suggestions
+
+Profiling outputs may include sampled public records, so generated JSON files are ignored by git by default. Review them before deciding whether to publish a summarized version.
 
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.
+
+Current profiling status: no real raw CSV file is present in this working tree, so no observed source columns have been committed yet. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`.
 
 ## License
 

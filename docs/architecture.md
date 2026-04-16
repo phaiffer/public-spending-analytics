@@ -8,6 +8,7 @@ The first architecture decision is restraint: keep the MVP batch-oriented, under
 
 - Use official bulk downloadable files as the primary source.
 - Keep raw files immutable once downloaded.
+- Profile one real source file before locking ingestion or modeling assumptions.
 - Convert raw CSV files into typed Parquet datasets before deeper modeling.
 - Use DuckDB as the local analytical engine.
 - Use dbt for SQL model structure, testing conventions, and documentation.
@@ -35,6 +36,31 @@ Git behavior:
 
 - Raw data files are ignored.
 - Empty folder placeholders are retained.
+
+### Profiling Layer
+
+Path: `profiling/`
+
+Purpose:
+
+- Inspect one manually downloaded CSV file before ingestion code is finalized.
+- Capture actual columns, row count, sample records, inferred basic types, and null-heavy columns.
+- Produce local JSON artifacts that can be reviewed and summarized in documentation.
+
+Git behavior:
+
+- Generated profiling JSON files are ignored by default because they may include sampled public records.
+- The folder placeholder is retained.
+
+Confirmed implementation:
+
+- The CLI command `gov-spending profile-raw-file` profiles one selected CSV file.
+- File selection supports an explicit `--file` path or a `--pattern` match under `data/raw/`.
+- Type inference and canonical mapping suggestions are heuristic and sample-based.
+
+Current limitation:
+
+- No real raw file exists in the repository working tree at the time of this update, so no source-specific model changes have been made.
 
 ### Staging File Layer
 
@@ -90,6 +116,9 @@ Manual source download
 data/raw/
         |
         v
+Python source profiling
+        |
+        v
 Python ingestion
         |
         v
@@ -112,7 +141,14 @@ curated analytical tables
 
 The project is designed around a future `fact_public_spending` model.
 
-Expected grain will be decided after profiling real files. The preferred target is one row per normalized spending-stage event with document traceability.
+Expected grain will be decided after profiling real files. The preferred target remains one row per normalized spending-stage event with document traceability, but this is provisional.
+
+Candidate grain options to evaluate from real profiles:
+
+- one row per document header, useful when the selected source file is header-level
+- one row per document item, useful when item files are needed for budget classification detail
+- one row per document-beneficiary relationship, useful when payment files include final beneficiary lists
+- one row per normalized spending-stage event, useful for unifying commitment, liquidation, and payment analysis
 
 Candidate fact columns:
 
@@ -165,6 +201,7 @@ Trade-off:
 - Automated downloads.
 - API ingestion.
 - Full schema mapping for all source files.
+- Final fact grain selection.
 - Production-grade data quality framework.
 - Dashboard layer.
 - CI/CD.

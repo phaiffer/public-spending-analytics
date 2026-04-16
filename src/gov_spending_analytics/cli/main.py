@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from gov_spending_analytics.ingestion.portal_transparencia import discover_raw_csv_files
+from gov_spending_analytics.profiling.raw_csv import profile_raw_csv_file, select_raw_csv_file
 from gov_spending_analytics.utils.config import load_project_config
 from gov_spending_analytics.utils.duckdb_bootstrap import bootstrap_duckdb
 
@@ -26,6 +27,44 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("show-config", help="Print the resolved project configuration.")
     subparsers.add_parser("list-raw-files", help="List discovered raw CSV files.")
+
+    profile_parser = subparsers.add_parser(
+        "profile-raw-file",
+        help="Profile one manually downloaded raw CSV file.",
+    )
+    profile_parser.add_argument(
+        "--file",
+        type=Path,
+        help="Explicit path to the raw CSV file to profile.",
+    )
+    profile_parser.add_argument(
+        "--pattern",
+        help="Case-insensitive substring used to select one discovered raw CSV file.",
+    )
+    profile_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output JSON profile path. Defaults to the configured profiling folder.",
+    )
+    profile_parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=20,
+        help="Number of sample records to include in the profile output.",
+    )
+    profile_parser.add_argument(
+        "--inference-rows",
+        type=int,
+        default=5_000,
+        help="Number of rows used for type and null profiling.",
+    )
+    profile_parser.add_argument(
+        "--null-threshold",
+        type=float,
+        default=0.8,
+        help="Null ratio at or above which a column is marked as null-heavy.",
+    )
+
     subparsers.add_parser(
         "bootstrap-duckdb",
         help="Create the local DuckDB database file if it does not already exist.",
@@ -49,6 +88,32 @@ def main() -> None:
             print(file_path)
         if not raw_files:
             print("No raw CSV files found.")
+        return
+
+    if args.command == "profile-raw-file":
+        raw_data_path = Path(config["paths"]["raw_data"])
+        try:
+            selected_file = select_raw_csv_file(raw_data_path, args.file, args.pattern)
+        except (FileNotFoundError, ValueError) as exc:
+            parser.error(str(exc))
+
+        output_path = args.output
+        if output_path is None:
+            profiling_path = Path(config["paths"].get("profiling_artifacts", "profiling"))
+            output_path = profiling_path / f"{selected_file.stem}_profile.json"
+
+        try:
+            profile_path = profile_raw_csv_file(
+                file_path=selected_file,
+                output_path=output_path,
+                sample_size=args.sample_size,
+                inference_rows=args.inference_rows,
+                null_threshold=args.null_threshold,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+
+        print(f"Profile written to: {profile_path}")
         return
 
     if args.command == "bootstrap-duckdb":

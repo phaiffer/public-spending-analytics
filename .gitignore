@@ -24,6 +24,10 @@ data/curated/**
 !data/staging/.gitkeep
 !data/curated/.gitkeep
 
+# Local profiling outputs may contain sampled public records.
+profiling/**
+!profiling/.gitkeep
+
 # DuckDB
 *.duckdb
 *.duckdb.wal

@@ -4,6 +4,18 @@ This document defines the intended MVP metrics for Brazilian federal public spen
 
 The definitions below are analytical targets. They must be validated against real source columns and source dictionaries before being treated as final.
 
+## Profiling Status
+
+No real raw spending CSV file is currently present in `data/raw/`, so these metrics remain provisional. The profiling workflow now captures observed columns, row count, sample records, inferred basic types, and null-heavy columns for one manually downloaded file.
+
+Metrics should move from provisional to confirmed only after:
+
+- the relevant source amount columns are observed
+- document or item grain is understood
+- spending-stage context is confirmed
+- date fields are mapped safely
+- beneficiary and government-body identifiers are evaluated for nulls and uniqueness
+
 ## Core Concepts
 
 ### Commitment
@@ -18,6 +30,8 @@ Candidate metric:
 committed_amount_brl = sum(amount_brl where spending_stage = 'commitment')
 ```
 
+Current status: provisional until an `Empenho` file or equivalent commitment source is profiled.
+
 ### Liquidation
 
 Liquidation represents spending recognized as delivered, fulfilled, or payable according to public accounting rules.
@@ -30,6 +44,8 @@ Candidate metric:
 liquidated_amount_brl = sum(amount_brl where spending_stage = 'liquidation')
 ```
 
+Current status: provisional until a `Liquidacao` file or equivalent liquidation source is profiled.
+
 ### Payment
 
 Payment represents spending effectively paid.
@@ -41,6 +57,8 @@ Candidate metric:
 ```text
 paid_amount_brl = sum(amount_brl where spending_stage = 'payment')
 ```
+
+Current status: provisional until a `Pagamento` file or equivalent payment source is profiled.
 
 ## MVP KPIs
 
@@ -159,7 +177,7 @@ Rules:
 
 ### Date
 
-Planned fields:
+Planned fields, subject to source profiling:
 
 - `date_key`
 - `date`
@@ -170,7 +188,7 @@ Planned fields:
 
 ### Government Body
 
-Planned fields:
+Planned fields, subject to source profiling:
 
 - `government_body_id`
 - `government_body_name`
@@ -179,7 +197,7 @@ Planned fields:
 
 ### Beneficiary
 
-Planned fields:
+Planned fields, subject to source profiling:
 
 - `beneficiary_id`
 - `beneficiary_name`
@@ -209,6 +227,8 @@ Initial quality checks should include:
 - date fields parse as dates
 - source file metadata is retained
 - duplicate handling rules are explicit
+
+The first profiling artifact should be used to decide which checks are realistic for the selected source file. For example, a null-heavy beneficiary field may be expected in some file types and problematic in others.
 
 ## Limitations
 
