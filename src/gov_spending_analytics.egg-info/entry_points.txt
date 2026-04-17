@@ -1,0 +1,2 @@
+[console_scripts]
+gov-spending = gov_spending_analytics.cli.main:main
