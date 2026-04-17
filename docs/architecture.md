@@ -87,10 +87,12 @@ Confirmed first implementation:
 
 Current staging assumptions:
 
-- `spending_document_id` and `amount_brl` must map unambiguously from the profile artifact.
+- `amount_brl` must map unambiguously from the profile artifact.
+- `spending_document_id` is provisional and optional because real `Despesas` files may expose more than one plausible document identifier.
 - `spending_stage` is inferred from the official `Despesas` file name family.
 - Source columns are preserved as normalized `source__*` fields.
 - Optional canonical fields are present only when the profile artifact supports a single clear mapping.
+- The staging write is blocked if required staged columns are missing or null, source traceability fields are missing or null, `source_row_number` is invalid, or `amount_brl` contains negative values.
 
 ### DuckDB Layer
 

@@ -224,14 +224,16 @@ Source labels should be mapped into these English analytical values.
 
 Initial quality checks should include:
 
-- required document identifiers are not null
+- required staged canonical fields are not null
 - spending stage values are accepted
 - amount fields parse as decimals
-- date fields parse as dates
-- source file metadata is retained
+- amount values are non-negative where the selected spending source is expected to carry positive spending values
+- source file metadata and source row numbers are retained
 - duplicate handling rules are explicit
 
 The first profiling artifact should be used to decide which checks are realistic for the selected source file. For example, a null-heavy beneficiary field may be expected in some file types and problematic in others.
+
+For the first `Despesas` staging implementation, `amount_brl` is the only required canonical field. `spending_document_id` remains optional and provisional until the real observed source columns support one stable document identifier across the selected file type.
 
 ## Limitations
 

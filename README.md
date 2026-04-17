@@ -296,13 +296,13 @@ Current staging grain:
 - source metadata is retained, including source file name, profile artifact name, source row number, source family, and spending stage
 - canonical fields are populated only when the profile artifact produced one unambiguous source-column mapping
 
-The command currently requires unambiguous profile-based mappings for:
+The command currently requires an unambiguous profile-based mapping for:
 
-- `spending_document_id`
 - `amount_brl`
 
 The command may also populate optional canonical fields when they are unambiguous in the profile:
 
+- `spending_document_id`
 - `spending_date`
 - `fiscal_year`
 - `government_body_id`
@@ -310,13 +310,27 @@ The command may also populate optional canonical fields when they are unambiguou
 - `beneficiary_id`
 - `beneficiary_name`
 
+`spending_document_id` is provisional at the staging layer. Real Portal da Transparencia
+`Despesas` files can expose more than one plausible document identifier, so staging keeps
+all observed source columns and only emits this canonical field when the profile has one
+clear source column. `amount_brl` remains required because the first staged spending path
+is not useful without a parsed monetary value.
+
+Before writing Parquet, staging now runs lightweight checks tied to the observed profile
+and staged output:
+
+- required staged columns exist and are populated
+- `amount_brl` values are non-negative
+- source traceability fields exist and are populated
+- `source_row_number` remains positive
+
 The spending stage is inferred from the official `Despesas` file name family, such as `Despesas_Empenho`, `Despesas_Liquidacao`, or `Despesas_Pagamento`.
 
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.
 
-Current profiling status in git-tracked documentation: no real raw CSV file or profile artifact is committed because raw data and local profiles are ignored. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`, then run `gov-spending stage-despesas-file` against the same file.
+Current profiling status in git-tracked documentation: no real raw CSV file or profile artifact is committed because raw data and local profiles are ignored. The staging implementation reads the ignored local profile artifact and uses only columns present in that artifact's `columns` list. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`, then run `gov-spending stage-despesas-file` against the same file.
 
 ## License
 

@@ -56,7 +56,9 @@ Known caveats:
 
 ### Current Profiling And Staging Status
 
-Real `Despesas` raw files and generated profile JSON files are local-only and ignored by git. In this checkout, no local official CSV or profile artifact was visible under `data/raw/` or `profiling/` during the staging implementation update, so this document does not claim specific observed source columns.
+Real `Despesas` raw files and generated profile JSON files are local-only and ignored by git. The first staging implementation reads the local profile artifact and treats its `columns` list as the source of truth for observed columns.
+
+No real official CSV or profile artifact is committed to the repository. If a profile artifact exists only on a developer machine, summarize the observed columns below before committing source-specific documentation. Do not add a column to the staged canonical mapping unless it appears in the real profile artifact.
 
 Confirmed from implementation:
 
@@ -67,14 +69,16 @@ Confirmed from implementation:
 - The first staging grain is one staged row per raw CSV data row from the selected file.
 - Source columns are preserved as normalized `source__*` columns for traceability.
 - Canonical fields are populated only from profile-based unambiguous mappings.
+- Canonical mappings are rejected if they point to columns not present in the profiled `columns` list.
+- Lightweight staging quality checks require populated source traceability fields, populated required canonical fields, positive `source_row_number` values, and non-negative `amount_brl` values.
 
 Required unambiguous staging mappings:
 
-- `spending_document_id`
 - `amount_brl`
 
 Optional unambiguous staging mappings:
 
+- `spending_document_id`
 - `spending_date`
 - `fiscal_year`
 - `government_body_id`
@@ -92,6 +96,7 @@ Still provisional:
 - relationship between header, item, impacted commitment, payment, and final beneficiary files
 - final mart grain
 - whether the dbt spending-document scaffold should be enabled for this staged Parquet output
+- whether any specific document identifier should be treated as required for every `Despesas` file type
 
 After running `gov-spending profile-raw-file`, summarize the observed columns here before treating a source mapping as confirmed.
 
@@ -174,6 +179,10 @@ Current canonical candidates:
 - `amount_brl`
 
 The profiler writes these suggestions under `canonical_column_suggestions`. These suggestions are not authoritative; staging uses them only when they are unambiguous and still validates the current raw CSV header against the profiled header before writing Parquet.
+
+The `spending_document_id` canonical field is provisional. It is optional in staging because the real profile may contain multiple plausible document-number fields, and a single required document ID should not be selected from ambiguous source evidence. All source columns remain available as `source__*` fields so document-key decisions can be revisited without changing the one-row-per-raw-row staged grain.
+
+The `amount_brl` canonical field remains required. The first `Despesas` staging path exists to stage spending amounts, so the profile must provide one unambiguous amount source column before Parquet output is written.
 
 The `spending_stage` field is expected to come from the file context or source-specific transformation, not necessarily from a raw column.
 

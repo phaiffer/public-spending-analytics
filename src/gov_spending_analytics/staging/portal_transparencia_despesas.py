@@ -16,11 +16,25 @@ from gov_spending_analytics.normalization.columns import (
     normalize_column_name,
     resolve_unambiguous_canonical_mapping,
 )
-
+from gov_spending_analytics.quality.basic_checks import (
+    check_non_negative_amount,
+    check_required_columns,
+    check_source_traceability,
+    raise_for_quality_failures,
+)
 
 SOURCE_SYSTEM = "portal_transparencia"
 SOURCE_FAMILY = "despesas"
 CHUNK_SIZE = 100_000
+TRACEABILITY_COLUMNS = (
+    "source_system",
+    "source_family",
+    "source_file_name",
+    "source_file_path",
+    "source_profile_name",
+    "source_row_number",
+    "spending_stage",
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +69,7 @@ def stage_profiled_despesas_csv(
     canonical_mapping = resolve_unambiguous_canonical_mapping(
         profile.get("canonical_column_suggestions", {})
     )
+    validate_canonical_mapping_sources(canonical_mapping, source_columns)
     validate_required_canonical_mapping(canonical_mapping)
 
     spending_stage = infer_spending_stage(file_path.name)
@@ -97,6 +112,7 @@ def stage_profiled_despesas_csv(
             canonical_mapping=canonical_mapping,
         )
 
+    validate_staged_data(staged)
     staged.to_parquet(output_path, index=False)
 
     return StagingResult(
@@ -190,6 +206,33 @@ def validate_required_canonical_mapping(canonical_mapping: dict[str, str]) -> No
             "The profiling artifact did not produce unambiguous mappings for required "
             f"staging fields: {missing}. Review the profile before staging."
         )
+
+
+def validate_canonical_mapping_sources(
+    canonical_mapping: dict[str, str],
+    source_columns: list[str],
+) -> None:
+    """Ensure profile mappings only point at observed source columns."""
+    observed_columns = set(source_columns)
+    invalid_mappings = {
+        canonical_name: source_column
+        for canonical_name, source_column in canonical_mapping.items()
+        if source_column not in observed_columns
+    }
+    if invalid_mappings:
+        raise ValueError(
+            "The profiling artifact contains canonical mappings to columns that were "
+            f"not observed in the profiled header: {invalid_mappings}"
+        )
+
+
+def validate_staged_data(staged: pd.DataFrame) -> None:
+    """Run lightweight source-evidence checks before writing staging output."""
+    failures = []
+    failures.extend(check_required_columns(staged, REQUIRED_STAGING_CANONICAL_COLUMNS))
+    failures.extend(check_non_negative_amount(staged, "amount_brl"))
+    failures.extend(check_source_traceability(staged, TRACEABILITY_COLUMNS))
+    raise_for_quality_failures(failures)
 
 
 def infer_spending_stage(file_name: str) -> str:
@@ -286,16 +329,11 @@ def build_empty_staged_frame(
     canonical_mapping: dict[str, str],
 ) -> pd.DataFrame:
     """Create an empty staged frame with the expected columns."""
-    metadata_columns = [
-        "source_system",
-        "source_family",
-        "source_file_name",
-        "source_file_path",
-        "source_profile_name",
-        "source_row_number",
-        "spending_stage",
-    ]
-    columns = metadata_columns + list(canonical_mapping) + list(normalized_columns.values())
+    columns = (
+        list(TRACEABILITY_COLUMNS)
+        + list(canonical_mapping)
+        + list(normalized_columns.values())
+    )
     return pd.DataFrame(columns=columns)
 
 

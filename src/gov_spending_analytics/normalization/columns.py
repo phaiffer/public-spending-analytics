@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import unicodedata
 
-
 CANONICAL_COLUMN_PATTERNS: dict[str, tuple[str, ...]] = {
     "spending_document_id": (
         r"\bnumero.*documento\b",
@@ -58,7 +57,7 @@ CANONICAL_COLUMN_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-REQUIRED_STAGING_CANONICAL_COLUMNS = ("spending_document_id", "amount_brl")
+REQUIRED_STAGING_CANONICAL_COLUMNS = ("amount_brl",)
 
 
 def normalize_column_name(column_name: str) -> str:
