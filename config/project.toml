@@ -17,6 +17,12 @@ base_download_page = "https://portaldatransparencia.gov.br/download-de-dados"
 spending_documents_page = "https://portaldatransparencia.gov.br/download-de-dados/despesas"
 recommended_raw_layout = "data/raw/portal_transparencia/despesas/YYYY/MM/"
 
+[sources.portal_transparencia_api]
+base_url = "https://api.portaldatransparencia.gov.br"
+api_key_env_var = "PORTAL_TRANSPARENCIA_API_KEY"
+timeout_seconds = 60
+max_retries = 3
+
 [modeling]
 default_currency = "BRL"
 planned_fact_table = "fact_public_spending"

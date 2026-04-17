@@ -22,6 +22,29 @@ The open data page lists public spending files under "Despesas publicas" with da
 
 For the MVP, this repository prioritizes spending execution and spending-stage documents. Transfers and other related datasets are potential future extensions, not the initial center of gravity.
 
+### Portal da Transparencia - API de Dados
+
+- Publisher: Controladoria-Geral da Uniao / Portal da Transparencia do Governo Federal
+- API information page: <https://portaldatransparencia.gov.br/api-de-dados>
+- API documentation: <https://api.portaldatransparencia.gov.br/>
+- API key registration: <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email>
+- MVP relevance: official filtered extraction for a narrow despesas slice
+
+Confirmed from the official OpenAPI documentation:
+
+- Authentication uses the `chave-api-dados` request header.
+- The despesas documents endpoint is `GET /api-de-dados/despesas/documentos`.
+- The documented query parameters for this endpoint are `dataEmissao`, `fase`, and `pagina`, with optional `unidadeGestora` and `gestao`.
+- The documented `fase` values are numeric: `1` for empenho, `2` for liquidacao, and `3` for pagamento.
+
+Assumed by the local implementation:
+
+- The endpoint should be treated as a targeted one-day extraction source, not a broad backfill source.
+- At least one additional filter is required for live extraction, such as `unidadeGestora` or `gestao`.
+- Pagination is complete when a requested page returns an empty JSON list.
+
+The Portal documentation describes the API as appropriate for filtered subsets and recommends bulk open-data files for complete large-volume access. The API path therefore complements, rather than replaces, the bulk CSV strategy.
+
 ## MVP Candidate Dataset 1
 
 ### Documentos de empenho, liquidacao e pagamento
@@ -138,7 +161,7 @@ For the MVP:
 2. Store raw downloads under `data/raw/`.
 3. Do not commit raw files to git.
 4. Document the download date, selected filters, and source page in future metadata files.
-5. Avoid API-first design until the bulk-file model is working.
+5. Avoid broad API-first design; use the API only for targeted, filtered extraction.
 6. Run local profiling before committing schema-specific ingestion logic.
 
 ## Raw File Naming Guidance

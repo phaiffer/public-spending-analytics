@@ -86,6 +86,57 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output Parquet path. Defaults under data/staging/portal_transparencia/despesas/.",
     )
 
+    despesas_documentos_parser = subparsers.add_parser(
+        "ingest-despesas-documentos",
+        help="Ingest raw Portal da Transparencia despesas/documentos API pages.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--data-emissao",
+        required=True,
+        help="Required issue date in DD/MM/YYYY format. Example: 02/01/2025.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--fase",
+        type=int,
+        required=True,
+        choices=(1, 2, 3),
+        help="Required spending phase code: 1=empenho, 2=liquidacao, 3=pagamento.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--unidade-gestora",
+        help="Optional Unidade Gestora emitente code. Required when --gestao is omitted.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--gestao",
+        help="Optional Gestao code. Required when --unidade-gestora is omitted.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--pagina-inicial",
+        type=int,
+        default=1,
+        help="First API page to request. Defaults to 1.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--max-paginas",
+        type=int,
+        help="Optional maximum number of non-empty pages to persist.",
+    )
+    despesas_documentos_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help=(
+            "Raw JSON output directory. Defaults under "
+            "data/raw/portal_transparencia_api/despesas_documentos/."
+        ),
+    )
+    despesas_documentos_parser.add_argument(
+        "--api-key",
+        help=(
+            "Portal da Transparencia API key. Prefer the configured environment "
+            "variable instead of passing secrets on the command line."
+        ),
+    )
+
     subparsers.add_parser(
         "bootstrap-duckdb",
         help="Create the local DuckDB database file if it does not already exist.",
@@ -179,6 +230,60 @@ def main() -> None:
         print("Canonical mapping:")
         for canonical_name, source_column in sorted(result.canonical_mapping.items()):
             print(f"- {canonical_name}: {source_column}")
+        return
+
+    if args.command == "ingest-despesas-documentos":
+        try:
+            from gov_spending_analytics.ingestion.portal_transparencia_api import (
+                build_api_client_from_config,
+                build_despesas_documentos_request,
+                default_despesas_documentos_output_dir,
+                ingest_despesas_documentos,
+                resolve_api_key,
+            )
+        except ModuleNotFoundError as exc:
+            parser.error(
+                f"Missing Python dependency for API ingestion: {exc.name}. "
+                'Install project dependencies with: python -m pip install -e ".[dev]"'
+            )
+
+        try:
+            request_params = build_despesas_documentos_request(
+                data_emissao=args.data_emissao,
+                fase=args.fase,
+                unidade_gestora=args.unidade_gestora,
+                gestao=args.gestao,
+                pagina_inicial=args.pagina_inicial,
+                max_paginas=args.max_paginas,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+
+        output_dir = args.output_dir
+        if output_dir is None:
+            output_dir = default_despesas_documentos_output_dir(
+                raw_data_path=Path(config["paths"]["raw_data"]),
+                request_params=request_params,
+            )
+        elif not output_dir.is_absolute():
+            output_dir = Path.cwd() / output_dir
+
+        try:
+            api_key = resolve_api_key(config=config, explicit_api_key=args.api_key)
+            client = build_api_client_from_config(config=config, api_key=api_key)
+            result = ingest_despesas_documentos(
+                client=client,
+                request_params=request_params,
+                output_dir=output_dir,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+
+        print(f"Raw API responses written under: {result.output_dir}")
+        print(f"Manifest written to: {result.manifest_path}")
+        print(f"Source endpoint: {result.source_endpoint}")
+        print(f"Pages persisted: {result.page_count}")
+        print(f"Records fetched: {result.total_records}")
         return
 
     if args.command == "bootstrap-duckdb":

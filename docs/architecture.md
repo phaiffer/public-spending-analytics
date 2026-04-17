@@ -30,6 +30,7 @@ Purpose:
 Expected file types:
 
 - CSV files from Portal da Transparencia bulk downloads.
+- JSON files from narrow Portal da Transparencia API extractions.
 - ZIP files may be stored temporarily if the source provides compressed downloads.
 
 Git behavior:
@@ -61,6 +62,32 @@ Confirmed implementation:
 Current limitation:
 
 - Real raw files and generated profile artifacts are local-only and gitignored. The first staging implementation reads those local artifacts when present; no official raw records are committed to the repository.
+
+### API Raw Ingestion Layer
+
+Path: `data/raw/portal_transparencia_api/despesas/`
+
+Purpose:
+
+- Extract a narrow, filtered despesas document slice from the official Portal da Transparencia API.
+- Persist raw JSON responses faithfully before any normalization decisions.
+- Capture a manifest with request parameters, timestamps, page count, record count, source endpoint, and raw page files.
+
+Confirmed first implementation:
+
+- Command: `gov-spending ingest-despesas-documentos`
+- Endpoint: `GET /api-de-dados/despesas/documentos`
+- Supported slice: one `dataEmissao`, one numeric `fase`, and at least one extra filter
+- Example: `--data-emissao 02/01/2025 --fase 3 --unidade-gestora <VALUE>`
+- API key source: environment variable configured by `sources.portal_transparencia_api.api_key_env_var`
+- Pagination: page-by-page requests stop when an empty JSON list is returned
+
+Current API assumptions:
+
+- This endpoint is constrained to a one-day request and should not be used as a broad backfill mechanism.
+- Live extraction requires valid filter values such as `unidadeGestora` or `gestao`.
+- Raw JSON fields are not treated as stable canonical fields until a live response is reviewed.
+- The API path is for practical first extraction and filtered subsets; bulk CSV remains the preferred route for large source coverage.
 
 ### Staging File Layer
 

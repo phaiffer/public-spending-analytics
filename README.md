@@ -28,11 +28,12 @@ The goal is not to build a dashboard first. The goal is to build the data founda
 - Local analytical processing with DuckDB.
 - Parquet as the intermediate storage format.
 - dbt models prepared for staging, intermediate, and mart layers.
+- A targeted raw API ingestion path for constrained Portal da Transparencia despesas document requests.
 - A future core fact table for spending amounts by date, government body, beneficiary, and spending stage.
 
 ### Out Of Scope For The MVP
 
-- API-first ingestion.
+- Broad API-first ingestion across all Portal da Transparencia sources.
 - State and municipal spending.
 - Procurement, contracts, agreements, and transfers as the main analytical scope.
 - Dashboards or BI tools.
@@ -57,7 +58,7 @@ The MVP is a local reproducible pipeline foundation that can eventually:
    - spending stage
    - amount
 
-The current repository foundation intentionally does not download real data automatically.
+The current repository foundation does not perform broad automated downloads.
 
 The first implemented data path is deliberately narrow: one manually downloaded and profiled Portal da Transparencia `Despesas` CSV can be staged locally as Parquet after its profiling artifact confirms the source header and unambiguous required mappings.
 
@@ -258,6 +259,71 @@ The profiling command writes a JSON summary under `profiling/` by default. The o
 - heuristic canonical column suggestions
 
 Profiling outputs may include sampled public records, so generated JSON files are ignored by git by default. Review them before deciding whether to publish a summarized version.
+
+## API Despesas Documentos Ingestion Workflow
+
+The project supports a narrow official API extraction path for raw Portal da
+Transparencia `despesas/documentos` responses. This is local-first raw
+ingestion: responses are stored as JSON exactly as returned by the API, and no
+staging, normalization, dbt modeling, or mart logic is applied in this step.
+
+The official API documentation confirms the despesas documents endpoint:
+
+```text
+GET https://api.portaldatransparencia.gov.br/api-de-dados/despesas/documentos
+```
+
+Confirmed documented query parameters for this endpoint:
+
+- `dataEmissao`: issue date in `DD/MM/YYYY`
+- `fase`: spending phase code, where `1` is empenho, `2` is liquidacao, and `3` is pagamento
+- `pagina`: page number
+- optional filters: `unidadeGestora` and `gestao`
+
+Observed endpoint constraints:
+
+- `dataEmissao`, `fase`, and `pagina` are required
+- the request period is limited to one day
+- at least one additional filter is required, such as `unidadeGestora` or `gestao`
+
+Configure an API key by registering at the Portal da Transparencia API page and
+setting the environment variable named in `config/project.toml`:
+
+```powershell
+$env:PORTAL_TRANSPARENCIA_API_KEY = "<your-api-key>"
+```
+
+Run a narrow extraction:
+
+```powershell
+gov-spending ingest-despesas-documentos `
+  --data-emissao 02/01/2025 `
+  --fase 3 `
+  --unidade-gestora <VALUE>
+```
+
+Default raw output pattern:
+
+```text
+data/raw/portal_transparencia_api/despesas_documentos/data_emissao=2025-01-02/fase=3/unidade_gestora=<VALUE>/
+```
+
+The extraction writes one raw JSON file per non-empty API page, such as:
+
+```text
+page=0001.json
+```
+
+It also writes `manifest.json` with request parameters, extraction timestamps,
+page count, record count, source endpoint, and the persisted raw files.
+
+What remains provisional:
+
+- raw API response fields are not treated as stable canonical fields yet
+- API raw JSON has not replaced the bulk CSV profiling/staging path
+- large extractions should still prefer official bulk open-data files, as the Portal documentation recommends
+- the first API path covers only `despesas/documentos`, not every Portal da Transparencia endpoint
+- valid `unidadeGestora` and `gestao` values must come from official/source context before live extraction
 
 ## First Staging Workflow
 
