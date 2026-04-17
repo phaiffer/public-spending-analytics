@@ -54,27 +54,46 @@ Known caveats:
 - Liquidation and payment files may reference impacted commitments, so the final relationship model should not assume a simple one-to-one document flow.
 - File sizes can be large; ingestion should support chunked reads in later implementation.
 
-### Current Profiling Status
+### Current Profiling And Staging Status
 
-No real `Despesas` CSV file is currently present under `data/raw/` in this working tree. Because of that, the repository does not yet commit observed source columns for this dataset.
+Real `Despesas` raw files and generated profile JSON files are local-only and ignored by git. In this checkout, no local official CSV or profile artifact was visible under `data/raw/` or `profiling/` during the staging implementation update, so this document does not claim specific observed source columns.
 
-Confirmed from the repository state:
+Confirmed from implementation:
 
 - The raw-data folder exists and is gitignored for real source files.
 - The profiling command can discover and profile one manually downloaded CSV file.
-- The dbt spending-document models remain scaffolded and disabled.
+- The first staging command reads a profile artifact, validates the raw CSV header against the profiled `columns` list, and writes one Parquet file.
+- The first staging command is limited to the Portal da Transparencia `Despesas` source family.
+- The first staging grain is one staged row per raw CSV data row from the selected file.
+- Source columns are preserved as normalized `source__*` columns for traceability.
+- Canonical fields are populated only from profile-based unambiguous mappings.
+
+Required unambiguous staging mappings:
+
+- `spending_document_id`
+- `amount_brl`
+
+Optional unambiguous staging mappings:
+
+- `spending_date`
+- `fiscal_year`
+- `government_body_id`
+- `government_body_name`
+- `beneficiary_id`
+- `beneficiary_name`
 
 Still provisional:
 
-- actual source columns
-- source column data types
-- row counts for a selected file
-- null-heavy fields
-- reliable document keys
+- actual source columns for the local official file
+- source column data types beyond profile inference
+- row count for the selected local file
+- null-heavy fields for the selected local file
+- reliable document keys beyond source-row traceability
 - relationship between header, item, impacted commitment, payment, and final beneficiary files
-- final fact grain
+- final mart grain
+- whether the dbt spending-document scaffold should be enabled for this staged Parquet output
 
-After running `gov-spending profile-raw-file`, summarize the observed columns here before implementing ingestion mappings.
+After running `gov-spending profile-raw-file`, summarize the observed columns here before treating a source mapping as confirmed.
 
 Suggested observed-column documentation pattern:
 
@@ -141,6 +160,7 @@ Column mapping is intentionally two-step:
 
 1. Normalize source labels to ASCII `snake_case`.
 2. Suggest candidate canonical fields from normalized labels.
+3. For staging, accept only canonical fields with exactly one candidate in the profile artifact.
 
 Current canonical candidates:
 
@@ -153,9 +173,31 @@ Current canonical candidates:
 - `beneficiary_name`
 - `amount_brl`
 
-The profiler writes these suggestions under `canonical_column_suggestions`. These suggestions are not authoritative; they must be reviewed against source dictionaries and sampled records.
+The profiler writes these suggestions under `canonical_column_suggestions`. These suggestions are not authoritative; staging uses them only when they are unambiguous and still validates the current raw CSV header against the profiled header before writing Parquet.
 
 The `spending_stage` field is expected to come from the file context or source-specific transformation, not necessarily from a raw column.
+
+## First Staging Output
+
+Command:
+
+```powershell
+gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\YYYY\MM\<official Despesas file>.csv
+```
+
+Default output:
+
+```text
+data/staging/portal_transparencia/despesas/<spending_stage>/<official file stem>.parquet
+```
+
+Current assumptions:
+
+- The raw file has already been profiled with `gov-spending profile-raw-file`.
+- The profile artifact defaults to `profiling/<official file stem>_profile.json`.
+- The source family is inferred from a `despesas` path component or an official `*_Despesas_*.csv` file name.
+- Spending stage is inferred from `Despesas_Empenho`, `Despesas_ItemEmpenho`, `Despesas_Liquidacao`, or `Despesas_Pagamento` in the file name.
+- This is a technical staging output, not the final analytical mart.
 
 ## Future Sources
 

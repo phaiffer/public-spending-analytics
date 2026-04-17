@@ -6,7 +6,9 @@ The definitions below are analytical targets. They must be validated against rea
 
 ## Profiling Status
 
-No real raw spending CSV file is currently present in `data/raw/`, so these metrics remain provisional. The profiling workflow now captures observed columns, row count, sample records, inferred basic types, and null-heavy columns for one manually downloaded file.
+Real raw spending CSV files and profile artifacts are local-only and ignored by git, so this document does not publish file-specific observed columns. The profiling workflow captures observed columns, row count, sample records, inferred basic types, and null-heavy columns for one manually downloaded file.
+
+The first staging implementation can now convert one profiled Portal da Transparencia `Despesas` CSV to Parquet. This does not finalize the mart grain or the metric definitions.
 
 Metrics should move from provisional to confirmed only after:
 
@@ -15,6 +17,7 @@ Metrics should move from provisional to confirmed only after:
 - spending-stage context is confirmed
 - date fields are mapped safely
 - beneficiary and government-body identifiers are evaluated for nulls and uniqueness
+- the staged Parquet output is reviewed against the profile artifact
 
 ## Core Concepts
 

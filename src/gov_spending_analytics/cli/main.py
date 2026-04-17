@@ -65,6 +65,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Null ratio at or above which a column is marked as null-heavy.",
     )
 
+    stage_parser = subparsers.add_parser(
+        "stage-despesas-file",
+        help="Stage one profiled Portal da Transparencia despesas CSV as Parquet.",
+    )
+    stage_parser.add_argument(
+        "--file",
+        type=Path,
+        required=True,
+        help="Path to the raw CSV file to stage.",
+    )
+    stage_parser.add_argument(
+        "--profile",
+        type=Path,
+        help="Path to the JSON profile artifact. Defaults to profiling/<file stem>_profile.json.",
+    )
+    stage_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output Parquet path. Defaults under data/staging/portal_transparencia/despesas/.",
+    )
+
     subparsers.add_parser(
         "bootstrap-duckdb",
         help="Create the local DuckDB database file if it does not already exist.",
@@ -114,6 +135,50 @@ def main() -> None:
             parser.error(str(exc))
 
         print(f"Profile written to: {profile_path}")
+        return
+
+    if args.command == "stage-despesas-file":
+        try:
+            from gov_spending_analytics.staging.portal_transparencia_despesas import (
+                stage_profiled_despesas_csv,
+            )
+        except ModuleNotFoundError as exc:
+            parser.error(
+                f"Missing Python dependency for staging: {exc.name}. "
+                'Install project dependencies with: python -m pip install -e ".[dev]"'
+            )
+
+        selected_file = args.file
+        if not selected_file.is_absolute():
+            selected_file = Path.cwd() / selected_file
+
+        profile_path = args.profile
+        if profile_path is None:
+            profiling_path = Path(config["paths"].get("profiling_artifacts", "profiling"))
+            profile_path = profiling_path / f"{selected_file.stem}_profile.json"
+        elif not profile_path.is_absolute():
+            profile_path = Path.cwd() / profile_path
+
+        output_path = args.output
+        if output_path is not None and not output_path.is_absolute():
+            output_path = Path.cwd() / output_path
+
+        try:
+            result = stage_profiled_despesas_csv(
+                file_path=selected_file,
+                profile_path=profile_path,
+                output_path=output_path,
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+
+        print(f"Staged Parquet written to: {result.output_path}")
+        print(f"Rows staged: {result.row_count}")
+        print(f"Source family: {result.source_family}")
+        print(f"Spending stage: {result.spending_stage}")
+        print("Canonical mapping:")
+        for canonical_name, source_column in sorted(result.canonical_mapping.items()):
+            print(f"- {canonical_name}: {source_column}")
         return
 
     if args.command == "bootstrap-duckdb":

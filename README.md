@@ -57,9 +57,9 @@ The MVP is a local reproducible pipeline foundation that can eventually:
    - spending stage
    - amount
 
-The current repository foundation intentionally does not download real data or claim completed validation against production files.
+The current repository foundation intentionally does not download real data automatically.
 
-The next step after downloading one official CSV file manually is source profiling. Profiling inspects the real file structure before ingestion and dbt modeling decisions are finalized.
+The first implemented data path is deliberately narrow: one manually downloaded and profiled Portal da Transparencia `Despesas` CSV can be staged locally as Parquet after its profiling artifact confirms the source header and unambiguous required mappings.
 
 ## Target Users
 
@@ -259,11 +259,64 @@ The profiling command writes a JSON summary under `profiling/` by default. The o
 
 Profiling outputs may include sampled public records, so generated JSON files are ignored by git by default. Review them before deciding whether to publish a summarized version.
 
+## First Staging Workflow
+
+The first staging command is limited to one Portal da Transparencia `Despesas` CSV and its matching profile artifact. It validates that the raw CSV header still matches the profiled columns before writing Parquet.
+
+Run profiling first:
+
+```powershell
+gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```
+
+Then stage that same file:
+
+```powershell
+gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```
+
+If the profile artifact is stored somewhere else, pass it explicitly:
+
+```powershell
+gov-spending stage-despesas-file `
+  --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv `
+  --profile profiling\20250101_Despesas_Pagamento_profile.json
+```
+
+Default output pattern:
+
+```text
+data/staging/portal_transparencia/despesas/<spending_stage>/<source file stem>.parquet
+```
+
+Current staging grain:
+
+- one staged row per raw CSV data row from the selected official file
+- original source columns are preserved with `source__` prefixes after ASCII snake-case normalization
+- source metadata is retained, including source file name, profile artifact name, source row number, source family, and spending stage
+- canonical fields are populated only when the profile artifact produced one unambiguous source-column mapping
+
+The command currently requires unambiguous profile-based mappings for:
+
+- `spending_document_id`
+- `amount_brl`
+
+The command may also populate optional canonical fields when they are unambiguous in the profile:
+
+- `spending_date`
+- `fiscal_year`
+- `government_body_id`
+- `government_body_name`
+- `beneficiary_id`
+- `beneficiary_name`
+
+The spending stage is inferred from the official `Despesas` file name family, such as `Despesas_Empenho`, `Despesas_Liquidacao`, or `Despesas_Pagamento`.
+
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.
 
-Current profiling status: no real raw CSV file is present in this working tree, so no observed source columns have been committed yet. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`.
+Current profiling status in git-tracked documentation: no real raw CSV file or profile artifact is committed because raw data and local profiles are ignored. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`, then run `gov-spending stage-despesas-file` against the same file.
 
 ## License
 

@@ -58,6 +58,8 @@ CANONICAL_COLUMN_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+REQUIRED_STAGING_CANONICAL_COLUMNS = ("spending_document_id", "amount_brl")
+
 
 def normalize_column_name(column_name: str) -> str:
     """Convert source column labels to predictable snake_case names."""
@@ -89,3 +91,16 @@ def suggest_canonical_columns(columns: list[str]) -> dict[str, list[dict[str, st
                 )
 
     return suggestions
+
+
+def resolve_unambiguous_canonical_mapping(
+    canonical_suggestions: dict[str, list[dict[str, str]]],
+) -> dict[str, str]:
+    """Return canonical-to-source mappings only when profiling found one clear source column."""
+    resolved: dict[str, str] = {}
+
+    for canonical_name, candidates in canonical_suggestions.items():
+        if len(candidates) == 1:
+            resolved[canonical_name] = candidates[0]["source_column"]
+
+    return resolved

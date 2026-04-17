@@ -60,7 +60,7 @@ Confirmed implementation:
 
 Current limitation:
 
-- No real raw file exists in the repository working tree at the time of this update, so no source-specific model changes have been made.
+- Real raw files and generated profile artifacts are local-only and gitignored. The first staging implementation reads those local artifacts when present; no official raw records are committed to the repository.
 
 ### Staging File Layer
 
@@ -74,7 +74,23 @@ Purpose:
 
 Expected output:
 
-- Parquet datasets partitioned by source, year, month, or another practical source-driven pattern.
+- Parquet datasets organized by source system, source family, and source-inferred spending stage.
+
+Confirmed first implementation:
+
+- Command: `gov-spending stage-despesas-file`
+- Source family: Portal da Transparencia `Despesas`
+- Scope: one selected raw CSV plus its matching profile artifact
+- Output: one Parquet file under `data/staging/portal_transparencia/despesas/<spending_stage>/`
+- Grain: one row per raw CSV data row
+- Source evidence: the command reads the profiling artifact, validates the raw header against profiled columns, and accepts only unambiguous profile-based canonical mappings
+
+Current staging assumptions:
+
+- `spending_document_id` and `amount_brl` must map unambiguously from the profile artifact.
+- `spending_stage` is inferred from the official `Despesas` file name family.
+- Source columns are preserved as normalized `source__*` fields.
+- Optional canonical fields are present only when the profile artifact supports a single clear mapping.
 
 ### DuckDB Layer
 
@@ -141,7 +157,7 @@ curated analytical tables
 
 The project is designed around a future `fact_public_spending` model.
 
-Expected grain will be decided after profiling real files. The preferred target remains one row per normalized spending-stage event with document traceability, but this is provisional.
+Expected grain will be decided after profiling and staging enough real files. The preferred target remains one row per normalized spending-stage event with document traceability, but this is provisional.
 
 Candidate grain options to evaluate from real profiles:
 
@@ -202,6 +218,8 @@ Trade-off:
 - API ingestion.
 - Full schema mapping for all source files.
 - Final fact grain selection.
+- Final mart grain selection.
+- Commitment-liquidation-payment linkage rules.
 - Production-grade data quality framework.
 - Dashboard layer.
 - CI/CD.
