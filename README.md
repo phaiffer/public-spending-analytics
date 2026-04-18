@@ -433,6 +433,32 @@ Current staging grain:
 The full staged file currently contains negative `amount_received_brl` values, so
 this source does not enforce a non-negative amount check at staging time.
 
+## Recebimentos dbt Staging Model
+
+The staged Parquet is registered in dbt as an external DuckDB source:
+
+```text
+source('portal_transparencia_staging_files', 'recebimentos_recursos_por_favorecido')
+```
+
+The first real dbt model for this source is:
+
+```text
+stg_portal_transparencia__recebimentos_recursos_por_favorecido
+```
+
+This model remains source-aligned and traceable. It keeps `launch_month` as the
+staged monthly value and adds conservative analytical helpers:
+
+- `launch_month_key`: integer `YYYYMM`
+- `launch_month_start_date`: first day of the month, for date joins
+- `launch_year`
+- `launch_month_number`
+
+`amount_received_brl` remains signed because negative values were observed in
+the real staged output. `beneficiary_id` remains text and geography remains
+flexible; `EX` / exterior values are not filtered or remapped.
+
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.

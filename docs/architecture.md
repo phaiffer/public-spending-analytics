@@ -164,6 +164,17 @@ Model layers:
 - `models/intermediate/`: reusable transformations, joins, and standardization.
 - `models/marts/`: business-facing fact and dimension models.
 
+Confirmed first real dbt model:
+
+- Source: `portal_transparencia_staging_files.recebimentos_recursos_por_favorecido`
+- Source registration: external DuckDB Parquet source over the staged file written by Python
+- Model: `stg_portal_transparencia__recebimentos_recursos_por_favorecido`
+- Model grain: one row per staged row, which is one row per raw CSV row
+- Amount handling: `amount_received_brl` remains signed
+- Beneficiary handling: `beneficiary_id` remains text
+- Geography handling: location fields remain source-aligned and can include values such as `EX`
+- Month handling: `launch_month` is preserved, with `launch_month_key`, `launch_month_start_date`, `launch_year`, and `launch_month_number` added for analytical use
+
 ## Intended Flow
 
 ```text

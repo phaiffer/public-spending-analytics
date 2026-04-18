@@ -84,6 +84,13 @@ Confirmed modeling notes from the profile and staged output:
 - The staged output preserves one row per raw CSV row.
 - The full staged file contains negative `amount_received_brl` values, so non-negative amount validation is not enforced for this source.
 
+Confirmed dbt transition:
+
+- The staged Parquet is registered as source `portal_transparencia_staging_files.recebimentos_recursos_por_favorecido`.
+- The first real dbt model is `stg_portal_transparencia__recebimentos_recursos_por_favorecido`.
+- The dbt model preserves `launch_month` and adds `launch_month_key`, `launch_month_start_date`, `launch_year`, and `launch_month_number`.
+- The dbt model remains source-aligned and does not create final marts or business KPIs.
+
 ## MVP Candidate Dataset 1
 
 ### Documentos de empenho, liquidacao e pagamento

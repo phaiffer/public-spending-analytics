@@ -1,5 +1,25 @@
 version: 2
 
+sources:
+  - name: portal_transparencia_staging_files
+    description: "Local Parquet files written by Python raw-to-staging jobs."
+    tables:
+      - name: recebimentos_recursos_por_favorecido
+        description: "Staged Recebimentos de Recursos por Favorecido Parquet file for 2026-01."
+        config:
+          external_location: "read_parquet('../data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/202601_RecebimentosRecursosPorFavorecido.parquet')"
+        columns:
+          - name: source_file_name
+            description: "Original raw CSV file name."
+          - name: source_row_number
+            description: "One-based row number from the raw CSV data rows."
+          - name: beneficiary_id
+            description: "Beneficiary identifier exactly as staged from Código Favorecido."
+          - name: launch_month
+            description: "Monthly launch period staged as YYYY-MM."
+          - name: amount_received_brl
+            description: "Signed received amount in Brazilian reais."
+
 models:
   - name: stg_portal_transparencia__spending_documents
     description: "Source-aligned spending document records from Portal da Transparencia. Disabled until real files are profiled."
@@ -15,3 +35,60 @@ models:
               values: ["commitment", "liquidation", "payment"]
       - name: amount_brl
         description: "Spending amount in Brazilian reais."
+
+  - name: stg_portal_transparencia__recebimentos_recursos_por_favorecido
+    description: "Source-aligned monthly received-resources records by beneficiary from the confirmed 2026-01 Portal da Transparencia file."
+    columns:
+      - name: source_system
+        description: "Source system label assigned by the Python staging job."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["portal_transparencia"]
+      - name: source_family
+        description: "Source family label assigned by the Python staging job."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["recebimentos_recursos_por_favorecido"]
+      - name: source_file_name
+        description: "Original raw CSV file name."
+        tests:
+          - not_null
+      - name: source_row_number
+        description: "One-based row number from the raw CSV data rows."
+        tests:
+          - not_null
+          - unique
+      - name: beneficiary_id
+        description: "Beneficiary identifier preserved as text; not assumed to be a CNPJ."
+        tests:
+          - not_null
+      - name: beneficiary_location_code
+        description: "Source location code from Sigla UF; values may include EX for exterior."
+        tests:
+          - not_null
+      - name: government_body_id
+        description: "Government body identifier from Código Órgão."
+        tests:
+          - not_null
+      - name: management_unit_id
+        description: "Management unit identifier from Código Unidade Gestora."
+        tests:
+          - not_null
+      - name: launch_month
+        description: "Original staged monthly key derived from Ano e mês do lançamento, formatted as YYYY-MM."
+        tests:
+          - not_null
+      - name: launch_month_key
+        description: "Integer month key for analytical use, formatted as YYYYMM."
+        tests:
+          - not_null
+      - name: launch_month_start_date
+        description: "First day of launch_month for date joins and monthly analysis."
+        tests:
+          - not_null
+      - name: amount_received_brl
+        description: "Signed received amount in Brazilian reais. Negative values are preserved because they exist in the real staged output."
+        tests:
+          - not_null
