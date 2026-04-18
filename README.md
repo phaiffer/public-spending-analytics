@@ -392,6 +392,47 @@ and staged output:
 
 The spending stage is inferred from the official `Despesas` file name family, such as `Despesas_Empenho`, `Despesas_Liquidacao`, or `Despesas_Pagamento`.
 
+## Recebimentos Por Favorecido Staging Workflow
+
+The first confirmed non-`Despesas` raw-to-staging path uses the official file:
+
+```text
+data/raw/202601_RecebimentosRecursosPorFavorecido.csv
+```
+
+Confirmed profile facts:
+
+- encoding: `latin-1`
+- delimiter: semicolon
+- row count: `300391`
+- column count: `12`
+- no null-heavy columns detected in the profiled sample
+
+Run staging:
+
+```powershell
+gov-spending stage-recebimentos-favorecido-file
+```
+
+Default output:
+
+```text
+data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/202601_RecebimentosRecursosPorFavorecido.parquet
+```
+
+Current staging grain:
+
+- one staged row per raw CSV row
+- no aggregation, deduplication, or beneficiary classification
+- source file name, source path, profile name, and source row number retained
+- `Código Favorecido` is staged as text, not an integer
+- `Sigla UF` is staged as a location code and may include values such as `EX`
+- `Ano e mês do lançamento` is staged as a monthly `YYYY-MM` key
+- `Valor Recebido` is parsed as `amount_received_brl`
+
+The full staged file currently contains negative `amount_received_brl` values, so
+this source does not enforce a non-negative amount check at staging time.
+
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.

@@ -45,6 +45,45 @@ Assumed by the local implementation:
 
 The Portal documentation describes the API as appropriate for filtered subsets and recommends bulk open-data files for complete large-volume access. The API path therefore complements, rather than replaces, the bulk CSV strategy.
 
+## MVP Candidate Dataset 0
+
+### Recebimento de recursos por favorecido
+
+- Profiled file: `202601_RecebimentosRecursosPorFavorecido.csv`
+- Profile artifact: `profiling/202601_RecebimentosRecursosPorFavorecido_profile.json`
+- Source family in staging: `recebimentos_recursos_por_favorecido`
+- Encoding: `latin-1`
+- Delimiter: semicolon
+- Row count: `300391`
+- Column count: `12`
+- Null-heavy columns in profiled sample: none
+- Current staging command: `gov-spending stage-recebimentos-favorecido-file`
+
+Confirmed observed columns and staging mappings:
+
+- `Código Favorecido` -> `beneficiary_id`
+- `Nome Favorecido` -> `beneficiary_name`
+- `Sigla UF` -> `beneficiary_location_code`
+- `Nome Município` -> `beneficiary_municipality_name`
+- `Código Órgão Superior` -> `superior_government_body_id`
+- `Nome Órgão Superior` -> `superior_government_body_name`
+- `Código Órgão` -> `government_body_id`
+- `Nome Órgão` -> `government_body_name`
+- `Código Unidade Gestora` -> `management_unit_id`
+- `Nome Unidade Gestora` -> `management_unit_name`
+- `Ano e mês do lançamento` -> `launch_month`
+- `Valor Recebido` -> `amount_received_brl`
+
+Confirmed modeling notes from the profile and staged output:
+
+- `beneficiary_id` must be treated as text, not as an integer.
+- `beneficiary_id` should not be assumed to always be a CNPJ.
+- Geography should not be constrained to Brazilian states only; observed values can include `EX` / exterior.
+- `launch_month` is a monthly field derived from `MM/YYYY`, not a daily timestamp.
+- `amount_received_brl` is parsed from the Brazilian decimal text in `Valor Recebido`.
+- The staged output preserves one row per raw CSV row.
+- The full staged file contains negative `amount_received_brl` values, so non-negative amount validation is not enforced for this source.
+
 ## MVP Candidate Dataset 1
 
 ### Documentos de empenho, liquidacao e pagamento

@@ -121,6 +121,18 @@ Current staging assumptions:
 - Optional canonical fields are present only when the profile artifact supports a single clear mapping.
 - The staging write is blocked if required staged columns are missing or null, source traceability fields are missing or null, `source_row_number` is invalid, or `amount_brl` contains negative values.
 
+Confirmed `Recebimentos de Recursos por Favorecido` implementation:
+
+- Command: `gov-spending stage-recebimentos-favorecido-file`
+- Source family: `recebimentos_recursos_por_favorecido`
+- Scope: `data/raw/202601_RecebimentosRecursosPorFavorecido.csv` plus its matching profile artifact
+- Output: one Parquet file under `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`
+- Grain: one row per raw CSV row
+- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300391` rows, `12` columns, and no null-heavy columns in the profiled sample
+- `Ano e mês do lançamento` is parsed as a monthly key, not a daily timestamp
+- `Valor Recebido` is parsed into `amount_received_brl`
+- Negative `amount_received_brl` values are allowed because they are present in the full staged file
+
 ### DuckDB Layer
 
 Default local database path:
