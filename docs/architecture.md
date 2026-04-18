@@ -175,6 +175,16 @@ Confirmed first real dbt model:
 - Geography handling: location fields remain source-aligned and can include values such as `EX`
 - Month handling: `launch_month` is preserved, with `launch_month_key`, `launch_month_start_date`, `launch_year`, and `launch_month_number` added for analytical use
 
+Confirmed first intermediate analytical model:
+
+- Model: `int_recebimentos_recursos_por_favorecido_monthly`
+- Grain: one row per month, beneficiary, government body, management unit, beneficiary location code, and beneficiary municipality name
+- Inputs: the real dbt staging model for `Recebimentos de Recursos por Favorecido`
+- Measures: `total_amount_received_brl`, `record_count`, and `negative_amount_record_count`
+- Amount handling: signed amounts are preserved and aggregated without forcing non-negative values
+- Traceability: aggregate rows retain source row-number bounds and source file name bounds for navigation back to staging
+- Source-row uniqueness: `source_row_number` should be treated as unique within `source_file_name`, not as a future global key across every file
+
 ## Intended Flow
 
 ```text

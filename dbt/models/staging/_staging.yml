@@ -56,10 +56,9 @@ models:
         tests:
           - not_null
       - name: source_row_number
-        description: "One-based row number from the raw CSV data rows."
+        description: "One-based row number from the raw CSV data rows. Unique within source_file_name, not necessarily across future files."
         tests:
           - not_null
-          - unique
       - name: beneficiary_id
         description: "Beneficiary identifier preserved as text; not assumed to be a CNPJ."
         tests:

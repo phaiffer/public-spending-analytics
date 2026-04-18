@@ -459,6 +459,24 @@ staged monthly value and adds conservative analytical helpers:
 the real staged output. `beneficiary_id` remains text and geography remains
 flexible; `EX` / exterior values are not filtered or remapped.
 
+The first intermediate model above staging is:
+
+```text
+int_recebimentos_recursos_por_favorecido_monthly
+```
+
+Its grain is one row per month, beneficiary, government body, management unit,
+beneficiary location code, and beneficiary municipality name. It produces:
+
+- `total_amount_received_brl`
+- `record_count`
+- `negative_amount_record_count`
+
+The model keeps signed amounts and does not classify beneficiary type. It also
+keeps source row-number bounds and source file name bounds for traceability.
+`source_row_number` should be understood as unique within `source_file_name`,
+not as a future global key across every source file.
+
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.

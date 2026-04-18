@@ -10,3 +10,55 @@ models:
         description: "Commitment, liquidation, or payment."
       - name: amount_brl
         description: "Event amount in Brazilian reais."
+
+  - name: int_recebimentos_recursos_por_favorecido_monthly
+    description: "Conservative monthly aggregation of received resources by beneficiary, government body, management unit, and source location fields."
+    columns:
+      - name: launch_month_key
+        description: "Analytical month key formatted as YYYYMM."
+        tests:
+          - not_null
+      - name: launch_month_start_date
+        description: "First day of the analytical launch month."
+        tests:
+          - not_null
+      - name: beneficiary_id
+        description: "Beneficiary identifier preserved as text; not assumed to be a CNPJ."
+        tests:
+          - not_null
+      - name: beneficiary_name
+        description: "Beneficiary name from the staged source."
+        tests:
+          - not_null
+      - name: beneficiary_location_code
+        description: "Source location code from Sigla UF; may include EX for exterior."
+        tests:
+          - not_null
+      - name: government_body_id
+        description: "Government body identifier from Código Órgão."
+        tests:
+          - not_null
+      - name: government_body_name
+        description: "Government body name from Nome Órgão."
+        tests:
+          - not_null
+      - name: management_unit_id
+        description: "Management unit identifier from Código Unidade Gestora."
+        tests:
+          - not_null
+      - name: management_unit_name
+        description: "Management unit name from Nome Unidade Gestora."
+        tests:
+          - not_null
+      - name: record_count
+        description: "Number of staged rows represented by this monthly aggregate row."
+        tests:
+          - not_null
+      - name: negative_amount_record_count
+        description: "Number of staged rows with signed negative amount_received_brl values."
+        tests:
+          - not_null
+      - name: total_amount_received_brl
+        description: "Signed sum of amount_received_brl for the monthly aggregate grain."
+        tests:
+          - not_null

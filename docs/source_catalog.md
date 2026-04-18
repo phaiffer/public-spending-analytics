@@ -91,6 +91,14 @@ Confirmed dbt transition:
 - The dbt model preserves `launch_month` and adds `launch_month_key`, `launch_month_start_date`, `launch_year`, and `launch_month_number`.
 - The dbt model remains source-aligned and does not create final marts or business KPIs.
 
+Confirmed intermediate monthly aggregation:
+
+- Model: `int_recebimentos_recursos_por_favorecido_monthly`
+- Grain: one row per `launch_month_key`, `beneficiary_id`, `beneficiary_name`, `government_body_id`, `government_body_name`, `management_unit_id`, `management_unit_name`, `beneficiary_location_code`, and `beneficiary_municipality_name`
+- Measures: `total_amount_received_brl`, `record_count`, and `negative_amount_record_count`
+- `total_amount_received_brl` remains signed because negative source values are real.
+- `source_row_number` uniqueness is only assumed within `source_file_name`; future multi-file models should preserve that compound traceability.
+
 ## MVP Candidate Dataset 1
 
 ### Documentos de empenho, liquidacao e pagamento
