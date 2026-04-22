@@ -4,6 +4,31 @@ Standalone portfolio repository for building a local-first analytical foundation
 
 This project focuses on the federal spending lifecycle, especially commitment, liquidation, and payment stages, analyzed by government body and beneficiary. It is designed as a serious data engineering portfolio project: clear scope, reproducible local execution, documented assumptions, and an extensible path from raw public files to analytical marts.
 
+## Case Study Summary
+
+This repository is currently a portfolio case study for one real implemented
+source family:
+
+- `Recebimentos de Recursos por Favorecido`
+
+What is real in the current pipeline:
+
+- one official raw CSV was profiled successfully
+- one real staged Parquet was written
+- one real dbt staging model was connected to DuckDB
+- one conservative intermediate monthly model was built
+- one first mart-ready monthly model was built
+
+Implemented source facts from the real file:
+
+- file: `202601_RecebimentosRecursosPorFavorecido.csv`
+- profiled rows: `300391`
+- profiled columns: `12`
+- staged rows written: `300391`
+- mart rows at beneficiary-month grain: `233666`
+- negative signed amount rows observed: `1659`
+- beneficiary IDs with more than one beneficiary name in the real source: `13427`
+
 ## Why This Project Matters
 
 Brazilian federal public spending data is publicly available, but it is not always easy to use analytically. The data is large, operationally shaped, and spread across files that require careful interpretation before business questions can be answered.
@@ -17,6 +42,26 @@ This repository aims to turn official bulk data into a transparent analytical mo
 - Which spending patterns deserve deeper public scrutiny?
 
 The goal is not to build a dashboard first. The goal is to build the data foundation that would make trustworthy dashboards, notebooks, and public analyses possible later.
+
+## Business Problem
+
+The business problem is simple to state and awkward to solve well:
+
+How do you turn official public spending files into something analytical without
+pretending the source is cleaner or more stable than it really is?
+
+For the implemented source family, the friction is not just technical file
+parsing. It is modeling discipline:
+
+- identifiers may look numeric but should stay textual
+- geography includes values such as `EX`, so a Brazil-only assumption would be wrong
+- monthly fields should not be inflated into fake daily dates
+- signed negative amounts are present in the real file and must not be erased
+- beneficiary identifiers do not behave like a clean master key in the current data
+
+That is why this repository favors a conservative pipeline: preserve the raw
+meaning first, then add only the analytical structure that is justified by real
+source evidence.
 
 ## Scope
 
@@ -42,6 +87,26 @@ The goal is not to build a dashboard first. The goal is to build the data founda
 - Airflow, Prefect, Spark, Kubernetes, Terraform, or other heavy platform tooling.
 
 These areas may become future phases after the federal spending model is stable.
+
+## Current Source Scope
+
+The repository contains groundwork for more than one source family, but the
+implemented analytical case study is intentionally narrower.
+
+Current implemented path:
+
+```text
+202601_RecebimentosRecursosPorFavorecido.csv
+  -> profiling JSON
+  -> staged Parquet
+  -> dbt staging model
+  -> dbt intermediate monthly model
+  -> mart_recebimentos_by_beneficiary_month
+```
+
+Other source paths in the repository, including the targeted `despesas`
+endpoint work, are still partial or intentionally scaffolded compared with this
+recebimentos path.
 
 ## MVP Definition
 
@@ -122,6 +187,44 @@ data/curated/ and analytical tables
 
 The architecture is intentionally simple. Python handles file discovery, configuration, and normalization tasks. DuckDB provides fast local analytics. dbt provides SQL modeling structure, tests, and documentation conventions.
 
+## Implemented Flow
+
+For the current case study, the implemented architectural flow is:
+
+```text
+Official CSV
+  202601_RecebimentosRecursosPorFavorecido.csv
+        |
+        v
+Profiling artifact
+  profiling/202601_RecebimentosRecursosPorFavorecido_profile.json
+        |
+        v
+Python raw-to-staging transformation
+        |
+        v
+Staged Parquet
+  data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/
+        |
+        v
+DuckDB external source in dbt
+        |
+        v
+dbt staging model
+  stg_portal_transparencia__recebimentos_recursos_por_favorecido
+        |
+        v
+dbt intermediate model
+  int_recebimentos_recursos_por_favorecido_monthly
+        |
+        v
+dbt mart
+  mart_recebimentos_by_beneficiary_month
+```
+
+That is the implemented pipeline today. It is deliberately local-first and does
+not depend on orchestration, cloud services, or dashboard infrastructure.
+
 ## Intended Analytical Model
 
 The MVP is designed around a future `fact_public_spending` table.
@@ -190,6 +293,171 @@ From a data engineering perspective, this repository is intended to demonstrate:
 - dbt project organization without premature platform complexity
 - metric definition discipline
 - honest documentation of assumptions and deferred work
+
+## Modeling Layers
+
+The implemented `recebimentos` path currently has four meaningful layers:
+
+1. Raw:
+   the original official CSV, preserved exactly as downloaded
+2. Staging:
+   one row per raw CSV row, typed and traceable, with no business-heavy reshaping
+3. Intermediate:
+   a conservative monthly aggregation that still keeps organizational and geographic detail
+4. Mart:
+   a beneficiary-month table intended for analysis, not for source reconstruction
+
+This shape is deliberate. It lets the repository show analytical progress
+without collapsing unresolved source issues too early.
+
+## Key Trade-Offs
+
+The most important trade-offs are not flashy. They are the ones that stop the
+model from lying.
+
+`beneficiary_id` remains text:
+- the real source presents identifier-looking values that should not be coerced into integers
+- the project does not assume the field is always a CNPJ
+
+Geography remains flexible:
+- `beneficiary_location_code` is preserved as provided
+- values such as `EX` are treated as valid source evidence, not data quality failures
+
+Negative amounts are preserved:
+- the real staged file contains `1659` negative signed amount rows
+- forcing a non-negative rule here would destroy observed source behavior
+
+`beneficiary_name` remains in the mart grain:
+- in the current real source, `13427` beneficiary IDs map to more than one beneficiary name
+- collapsing the mart to month + `beneficiary_id` would merge distinct labels too aggressively
+
+`source_row_number` is only scoped within `source_file_name`:
+- that is safe for the implemented file
+- it is not advertised as a future global key across all files and months
+
+## Negative Amounts
+
+Negative amounts are not treated as noise in this repository.
+
+In the implemented `Recebimentos de Recursos por Favorecido` file:
+
+- `1659` rows contain negative signed amounts
+
+The pipeline therefore keeps `amount_received_brl` signed through staging,
+intermediate, and mart layers. The current implementation does not claim a full
+business interpretation for every negative value. It only makes the narrower
+and safer claim that the source contains them and the analytical model should
+preserve them.
+
+## Why `beneficiary_name` Stays In The Mart Grain
+
+This is the most important modeling choice in the current case study.
+
+The first mart is:
+
+```text
+mart_recebimentos_by_beneficiary_month
+```
+
+Its grain is one row per:
+
+- `launch_month_key`
+- `beneficiary_id`
+- `beneficiary_name`
+
+`beneficiary_name` is not kept there for decoration. It is part of the grain
+because the real data shows that `beneficiary_id` alone is not stable enough
+for a beneficiary-level mart. In the implemented file, multiple names can
+appear under the same beneficiary ID. Until that identity problem is solved
+with stronger source evidence, `beneficiary_name` must remain in the grain to
+avoid collapsing distinct beneficiary labels into one row.
+
+## Key Findings
+
+The current case study supports a few concrete observations from the real
+implemented source:
+
+- the source is analytically usable, but only after careful typing and monthly normalization
+- beneficiary identity is not fully stable at the ID-only level
+- negative signed amounts are part of the real source behavior
+- a conservative mart can still be built without inventing unsupported business logic
+
+These are modest findings on purpose. They are grounded in the implemented
+pipeline rather than in a polished narrative detached from the data.
+
+## Analytical Examples
+
+The current mart supports straightforward monthly beneficiary analysis. Example
+queries below assume the mart model has been built in DuckDB/dbt.
+
+Top beneficiaries by signed monthly amount:
+
+```sql
+select
+    launch_month_key,
+    beneficiary_id,
+    beneficiary_name,
+    total_amount_received_brl
+from mart_recebimentos_by_beneficiary_month
+order by total_amount_received_brl desc
+limit 20;
+```
+
+Beneficiaries with the most negative records:
+
+```sql
+select
+    launch_month_key,
+    beneficiary_id,
+    beneficiary_name,
+    negative_amount_record_count,
+    total_record_count,
+    total_amount_received_brl
+from mart_recebimentos_by_beneficiary_month
+where negative_amount_record_count > 0
+order by negative_amount_record_count desc, total_amount_received_brl asc;
+```
+
+Total received amount by month:
+
+```sql
+select
+    launch_month_key,
+    launch_month_start_date,
+    sum(total_amount_received_brl) as month_total_amount_received_brl,
+    sum(total_record_count) as month_total_record_count
+from mart_recebimentos_by_beneficiary_month
+group by 1, 2
+order by 1;
+```
+
+Beneficiary-name collisions under the same beneficiary ID:
+
+```sql
+select
+    launch_month_key,
+    beneficiary_id,
+    count(distinct beneficiary_name) as distinct_name_count
+from mart_recebimentos_by_beneficiary_month
+group by 1, 2
+having count(distinct beneficiary_name) > 1
+order by distinct_name_count desc, beneficiary_id;
+```
+
+Largest management-unit totals from the intermediate layer:
+
+```sql
+select
+    launch_month_key,
+    management_unit_id,
+    management_unit_name,
+    sum(total_amount_received_brl) as total_amount_received_brl,
+    sum(record_count) as total_record_count
+from int_recebimentos_recursos_por_favorecido_monthly
+group by 1, 2, 3
+order by total_amount_received_brl desc
+limit 20;
+```
 
 ## Getting Started
 
@@ -501,6 +769,24 @@ The mart includes:
 
 The mart keeps signed amounts and exposes source file and source row-number
 bounds for traceability back to the intermediate and staging layers.
+
+## Limitations And Future Work
+
+Current limitations are explicit:
+
+- only one real `recebimentos` file is fully implemented through mart level
+- the dbt CLI could not be executed in the current Python 3.14 environment because of an upstream dependency import error, so dbt model logic was validated directly in DuckDB instead
+- `beneficiary_id` is not yet a reliable beneficiary master key
+- beneficiary type classification is intentionally deferred
+- organizational and geographic attributes are not part of the first mart grain
+- the repository does not yet provide a broad multi-source unified spending mart
+
+Reasonable next steps, without changing the project character:
+
+- run the same path for additional months of the same source family
+- compare whether beneficiary-name collisions remain common across months
+- decide whether a separate beneficiary reference layer is justified by repeated evidence
+- extend the same conservative pattern to additional official source families
 
 ## Official Source Starting Point
 
