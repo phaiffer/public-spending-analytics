@@ -262,6 +262,24 @@ dbt mart
 That is the implemented pipeline today. It is deliberately local-first and does
 not depend on orchestration, cloud services, or dashboard infrastructure.
 
+## Pipeline Evidence
+
+Staging command success
+
+<img src="docs/assets/screenshots/04-staging-command-success.png" alt="Staging command success" width="900" />
+
+DuckDB validation over the staged Parquet
+
+<img src="docs/assets/screenshots/06-duckdb-parquet-validation.png" alt="DuckDB validation over the staged Parquet" width="900" />
+
+Mart-layer SQL preview
+
+<img src="docs/assets/screenshots/07-mart-sql-preview.png" alt="Mart-layer SQL preview" width="900" />
+
+The repository includes evidence across the raw-source, profiling, staged
+Parquet, and mart SQL layers, with the strongest pipeline checkpoints shown
+here.
+
 ## Intended Analytical Model
 
 The MVP is designed around a future `fact_public_spending` table.
