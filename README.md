@@ -2,7 +2,14 @@
 
 Standalone portfolio repository for building a local-first analytical foundation over Brazilian federal public spending data from official public sources.
 
-This project focuses on the federal spending lifecycle, especially commitment, liquidation, and payment stages, analyzed by government body and beneficiary. It is designed as a serious data engineering portfolio project: clear scope, reproducible local execution, documented assumptions, and an extensible path from raw public files to analytical marts.
+This repository is currently centered on one real implemented analytical case
+study from the Portal da Transparencia:
+
+- `Recebimentos de Recursos por Favorecido`
+
+It is designed as a serious local-first data engineering portfolio project:
+clear scope, reproducible execution, documented trade-offs, and an honest line
+between what is already implemented and what is still planned.
 
 ## Case Study Summary
 
@@ -33,15 +40,22 @@ Implemented source facts from the real file:
 
 Brazilian federal public spending data is publicly available, but it is not always easy to use analytically. The data is large, operationally shaped, and spread across files that require careful interpretation before business questions can be answered.
 
-This repository aims to turn official bulk data into a transparent analytical model that can answer practical questions such as:
+This repository aims to turn official public data into transparent analytical
+models without pretending the source is cleaner than it is.
 
-- Which government bodies committed, liquidated, and paid the most spending?
-- Which beneficiaries received the largest payments?
-- How do spending stages compare across time?
-- Where are there gaps between committed, liquidated, and paid amounts?
-- Which spending patterns deserve deeper public scrutiny?
+The current implemented case study asks a narrower but real question:
 
-The goal is not to build a dashboard first. The goal is to build the data foundation that would make trustworthy dashboards, notebooks, and public analyses possible later.
+- how can one official monthly source file about received resources be profiled,
+  staged, tested, and modeled into a conservative beneficiary-month mart?
+
+The broader repository direction is still larger than the implemented case
+study:
+
+- a future analytical foundation over the federal spending lifecycle, including
+  commitment, liquidation, and payment stages
+
+The goal is not to build a dashboard first. The goal is to build a trustworthy
+data foundation and show the engineering judgment behind it.
 
 ## Business Problem
 
@@ -65,16 +79,24 @@ source evidence.
 
 ## Scope
 
-### In Scope For The MVP
+### Current Implemented Scope
 
-- Brazilian federal public spending data.
-- Official bulk downloadable files from Portal da Transparencia.
-- Batch-oriented ingestion from local CSV files.
-- Local analytical processing with DuckDB.
-- Parquet as the intermediate storage format.
-- dbt models prepared for staging, intermediate, and mart layers.
-- A targeted raw API ingestion path for constrained Portal da Transparencia despesas document requests.
-- A future core fact table for spending amounts by date, government body, beneficiary, and spending stage.
+- One real Portal da Transparencia bulk CSV source:
+  `Recebimentos de Recursos por Favorecido`
+- Local profiling of that real source file
+- Python raw-to-staging transformation into Parquet
+- DuckDB + dbt staging, intermediate, and first mart-ready modeling for that
+  source family
+- A targeted raw API ingestion path for the constrained
+  `despesas/documentos` endpoint, implemented as raw ingestion only
+
+### Future Planned Scope
+
+- Broader Brazilian federal public spending analytics
+- Additional official bulk files from Portal da Transparencia
+- Spending-lifecycle modeling across commitment, liquidation, and payment
+- A future core fact table for spending amounts by date, government body,
+  beneficiary, and spending stage
 
 ### Out Of Scope For The MVP
 
@@ -108,24 +130,36 @@ Other source paths in the repository, including the targeted `despesas`
 endpoint work, are still partial or intentionally scaffolded compared with this
 recebimentos path.
 
-## MVP Definition
+## Repository Direction
 
-The MVP is a local reproducible pipeline foundation that can eventually:
+The repository has two distinct layers of ambition:
 
-1. Accept downloaded Portal da Transparencia public spending CSV files in `data/raw/`.
-2. Normalize selected spending files into clean Parquet datasets under `data/staging/`.
-3. Load and transform those datasets with DuckDB and dbt.
-4. Produce curated analytical tables under `data/curated/` or a local DuckDB database.
-5. Support spending analysis by:
-   - date
-   - government body
-   - beneficiary
-   - spending stage
-   - amount
+1. Current implemented case study:
+   a real end-to-end analytical path for one official `recebimentos` source
+2. Future repository direction:
+   a broader local analytical foundation for federal spending data
 
-The current repository foundation does not perform broad automated downloads.
+The repository does not currently implement the full broader vision. The
+implemented work is intentionally narrower and should be read that way.
 
-The first implemented data path is deliberately narrow: one manually downloaded and profiled Portal da Transparencia `Despesas` CSV can be staged locally as Parquet after its profiling artifact confirms the source header and unambiguous required mappings.
+## Current Implemented Questions
+
+- What is the signed total amount received per beneficiary in the implemented
+  month?
+- Which beneficiaries have the largest positive or negative received totals?
+- How many source records contribute to each beneficiary-month row?
+- How often do negative signed values occur?
+- How often does the same `beneficiary_id` appear with more than one
+  `beneficiary_name`?
+
+## Future Planned Questions
+
+- Which government bodies committed, liquidated, and paid the most spending?
+- Which beneficiaries received the largest payments across spending stages?
+- How do spending stages compare across time?
+- Where are there gaps between committed, liquidated, and paid amounts?
+- Which spending patterns deserve deeper public scrutiny across the broader
+  lifecycle?
 
 ## Target Users
 
@@ -134,16 +168,18 @@ The first implemented data path is deliberately narrow: one manually downloaded 
 - **Civic tech practitioners** interested in reproducible use of official open data.
 - **The repository owner** as a focused standalone project separate from a broader portfolio.
 
-## Key Analytical Questions
+## Current Implemented KPIs
 
-- What is the total committed, liquidated, and paid spending by month?
-- Which government bodies have the highest paid amounts?
-- Which beneficiaries receive the largest payments?
-- Where are the largest differences between committed and paid amounts?
-- How do payment patterns change across fiscal years?
-- Which spending stages are available at document level, and which require aggregation rules?
+- **Total Amount Received**: Signed sum of `amount_received_brl` in the current
+  source family.
+- **Total Record Count**: Number of source-derived records represented in an
+  aggregate row.
+- **Negative Amount Record Count**: Number of source-derived records with signed
+  negative values.
+- **Beneficiary Name Collision Count**: Count of beneficiary IDs that map to
+  more than one beneficiary name in the implemented source month.
 
-## Main KPIs
+## Future Planned KPIs
 
 - **Committed Amount**: Total value formally committed by the government.
 - **Liquidated Amount**: Total value recognized as delivered or payable after liquidation.
@@ -153,7 +189,8 @@ The first implemented data path is deliberately narrow: one manually downloaded 
 - **Open Commitment Amount**: Committed amount minus paid amount.
 - **Beneficiary Concentration**: Share of paid amount represented by top beneficiaries.
 
-Metric details and caveats are documented in [docs/metric_definitions.md](docs/metric_definitions.md).
+Metric details and caveats, including future planned definitions, are
+documented in [docs/metric_definitions.md](docs/metric_definitions.md).
 
 ## High-Level Architecture
 
