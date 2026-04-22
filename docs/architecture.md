@@ -185,6 +185,15 @@ Confirmed first intermediate analytical model:
 - Traceability: aggregate rows retain source row-number bounds and source file name bounds for navigation back to staging
 - Source-row uniqueness: `source_row_number` should be treated as unique within `source_file_name`, not as a future global key across every file
 
+Confirmed first mart-ready model:
+
+- Model: `mart_recebimentos_by_beneficiary_month`
+- Grain: one row per month, `beneficiary_id`, and `beneficiary_name`
+- Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
+- Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`
+- Scope decision: organizational and geographic attributes are treated as descriptive upstream context, not as part of the first mart grain
+- Traceability: mart rows retain source file-name bounds and source row-number bounds
+
 ## Intended Flow
 
 ```text

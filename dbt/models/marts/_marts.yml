@@ -1,6 +1,38 @@
 version: 2
 
 models:
+  - name: mart_recebimentos_by_beneficiary_month
+    description: "First conservative mart-ready monthly view of received resources by beneficiary."
+    columns:
+      - name: launch_month_key
+        description: "Mart month key formatted as YYYYMM."
+        tests:
+          - not_null
+      - name: launch_month_start_date
+        description: "First day of the mart month."
+        tests:
+          - not_null
+      - name: beneficiary_id
+        description: "Beneficiary identifier preserved as text."
+        tests:
+          - not_null
+      - name: beneficiary_name
+        description: "Beneficiary name kept in the mart grain because beneficiary_id alone is not unique enough in the real source."
+        tests:
+          - not_null
+      - name: total_amount_received_brl
+        description: "Signed monthly received amount aggregated at the mart grain."
+        tests:
+          - not_null
+      - name: total_record_count
+        description: "Total number of intermediate rows represented by the mart row."
+        tests:
+          - not_null
+      - name: negative_amount_record_count
+        description: "Number of aggregated rows with signed negative amounts."
+        tests:
+          - not_null
+
   - name: fact_public_spending
     description: "Future core spending fact table by spending-stage event."
     columns:

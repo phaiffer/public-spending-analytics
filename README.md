@@ -477,6 +477,31 @@ keeps source row-number bounds and source file name bounds for traceability.
 `source_row_number` should be understood as unique within `source_file_name`,
 not as a future global key across every source file.
 
+The first mart-ready model above that intermediate layer is:
+
+```text
+mart_recebimentos_by_beneficiary_month
+```
+
+Its grain is one row per month, `beneficiary_id`, and `beneficiary_name`.
+Organizational and geographic fields are intentionally not part of the mart
+grain in this first version; they remain available in the intermediate layer.
+
+`beneficiary_name` remains in the mart grain because the real data shows that
+`beneficiary_id` alone is not stable enough for beneficiary-level aggregation.
+In the current source, multiple names can appear under the same
+`beneficiary_id`, so collapsing to month + ID would merge distinct beneficiary
+labels too aggressively.
+
+The mart includes:
+
+- `total_amount_received_brl`
+- `total_record_count`
+- `negative_amount_record_count`
+
+The mart keeps signed amounts and exposes source file and source row-number
+bounds for traceability back to the intermediate and staging layers.
+
 ## Official Source Starting Point
 
 The initial source strategy is based on the Portal da Transparencia open data download area, especially the public spending files listed under "Despesas publicas", including "Documentos de empenho, liquidacao e pagamento" and "Execucao da despesa". See [docs/source_catalog.md](docs/source_catalog.md) for details and source links checked during repository creation.

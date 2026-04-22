@@ -99,6 +99,14 @@ Confirmed intermediate monthly aggregation:
 - `total_amount_received_brl` remains signed because negative source values are real.
 - `source_row_number` uniqueness is only assumed within `source_file_name`; future multi-file models should preserve that compound traceability.
 
+Confirmed first mart layer:
+
+- Model: `mart_recebimentos_by_beneficiary_month`
+- Grain: one row per `launch_month_key`, `beneficiary_id`, and `beneficiary_name`
+- Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
+- `beneficiary_name` remains in the mart grain because the real data shows multiple names under the same `beneficiary_id`
+- Organizational and geographic attributes remain available in the intermediate layer instead of being forced into the first mart grain
+
 ## MVP Candidate Dataset 1
 
 ### Documentos de empenho, liquidacao e pagamento
