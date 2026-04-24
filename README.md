@@ -849,6 +849,14 @@ The initial source strategy is based on the Portal da Transparencia open data do
 
 Current profiling status in git-tracked documentation: no real raw CSV file or profile artifact is committed because raw data and local profiles are ignored. The staging implementation reads the ignored local profile artifact and uses only columns present in that artifact's `columns` list. Run `gov-spending profile-raw-file` after placing a manually downloaded file under `data/raw/`, then run `gov-spending stage-despesas-file` against the same file.
 
+## Analytical Output Samples
+
+Supplementary analytical output examples for the current implemented case study
+are included as supporting material.
+
+- Excel workbook: [docs/assets/outputs/public_spending_case_outputs.xlsx](docs/assets/outputs/public_spending_case_outputs.xlsx)
+- Supporting Excel screenshots: [docs/assets/screenshots/excel/](docs/assets/screenshots/excel/)
+
 ## License
 
 No license has been selected yet. Add one before publishing or reusing this repository broadly.
