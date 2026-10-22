@@ -129,6 +129,44 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    sync_parser = subparsers.add_parser(
+        "sync-recebimentos",
+        help=(
+            "Download new or republished monthly Recebimentos files from the Portal, "
+            "register each version, and stage it."
+        ),
+    )
+    sync_range = sync_parser.add_mutually_exclusive_group()
+    sync_range.add_argument(
+        "--all",
+        action="store_true",
+        help="Check every published month, from 2013-12 to the current month.",
+    )
+    sync_range.add_argument(
+        "--since",
+        help="First month to check, as YYYY-MM. Without --since or --all, sync checks "
+        "every month it already tracks plus newer ones (the last 12 months on a first run).",
+    )
+    sync_parser.add_argument(
+        "--until",
+        help="Last month to check, as YYYY-MM. Defaults to the current month.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only ask the server what changed; download nothing.",
+    )
+    sync_parser.add_argument(
+        "--keep-csv",
+        action="store_true",
+        help="Keep the extracted CSV next to the downloaded archive after staging.",
+    )
+    sync_parser.add_argument(
+        "--dbt-build",
+        action="store_true",
+        help="Run dbt build when at least one month was staged.",
+    )
+
     despesas_documentos_parser = subparsers.add_parser(
         "ingest-despesas-documentos",
         help="[experimental] Ingest raw Portal da Transparencia despesas/documentos API pages.",
@@ -327,6 +365,10 @@ def main() -> None:
             print(f"- {source_column}: {staged_column}")
         return
 
+    if args.command == "sync-recebimentos":
+        run_sync_recebimentos(args, parser)
+        return
+
     if args.command == "ingest-despesas-documentos":
         try:
             from gov_spending_analytics.ingestion.portal_transparencia_api import (
@@ -387,6 +429,51 @@ def main() -> None:
         return
 
     parser.error(f"Unknown command: {args.command}")
+
+
+def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Sync the monthly Recebimentos files and optionally rebuild the dbt project."""
+    from gov_spending_analytics.ingestion.portal_sync import (
+        SyncPaths,
+        count_by_status,
+        current_month,
+        load_remote_state,
+        select_months,
+        sync_recebimentos,
+    )
+    from gov_spending_analytics.utils.dbt_runner import run_dbt_build
+
+    paths = SyncPaths()
+    try:
+        months = select_months(
+            include_all=args.all,
+            since=args.since,
+            until=args.until,
+            remote_state=load_remote_state(paths.remote_state_path),
+            today_month=current_month(),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    print(f"Checking {len(months)} months: {months[0]} to {months[-1]}")
+    results = sync_recebimentos(
+        months=months,
+        paths=paths,
+        keep_csv=args.keep_csv,
+        dry_run=args.dry_run,
+        report=lambda result: print(
+            f"{result.reference_month} {result.status:<14} {result.detail}", flush=True
+        ),
+    )
+    counts = count_by_status(results)
+    print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
+
+    if args.dbt_build and counts.get("staged"):
+        print("Running dbt build")
+        if run_dbt_build() != 0:
+            sys.exit("dbt build failed")
+    if counts.get("failed"):
+        sys.exit(f"{counts['failed']} month(s) failed; they are retried on the next run")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ env/
 data/raw/**
 data/staging/**
 data/curated/**
+data/sync/**
 !data/raw/.gitkeep
 !data/staging/.gitkeep
 !data/curated/.gitkeep
