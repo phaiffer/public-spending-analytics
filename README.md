@@ -25,16 +25,23 @@ What is real in the current pipeline:
 - one real dbt staging model was connected to DuckDB
 - one conservative intermediate monthly model was built
 - one first mart-ready monthly model was built
+- `dbt build` runs end to end through the dbt CLI (48 nodes: models, seed, and data tests)
 
 Implemented source facts from the real file:
 
-- file: `202601_RecebimentosRecursosPorFavorecido.csv`
-- profiled rows: `300391`
+- file: `202601_RecebimentosRecursosPorFavorecido.csv`, version retrieved on
+  2026-10-21 and pinned by SHA-256 in `config/source_manifest.toml`
+- profiled rows: `300350`
 - profiled columns: `12`
-- staged rows written: `300391`
-- mart rows at beneficiary-month grain: `233666`
-- negative signed amount rows observed: `1659`
-- beneficiary IDs with more than one beneficiary name in the real source: `13427`
+- staged rows written: `300350`
+- mart rows at beneficiary-month grain: `233654`
+- negative signed amount rows observed: `1656`
+- beneficiary IDs with more than one beneficiary name in the real source: `13426`
+
+The Portal republished this January 2026 file on 2026-10-10. An earlier,
+unhashed version of the same file had `300391` rows, `1659` negative rows, and
+`233666` mart rows; the screenshots and Excel samples below come from that
+earlier run.
 
 ## Why This Project Matters
 
@@ -278,7 +285,15 @@ Mart-layer SQL preview
 
 The repository includes evidence across the raw-source, profiling, staged
 Parquet, and mart SQL layers, with the strongest pipeline checkpoints shown
-here.
+here. These screenshots were captured on the earlier `300391`-row version of
+the source file.
+
+`dbt build` result against the registered `300350`-row version (2026-10-21):
+
+```text
+Finished running 1 seed, 2 table models, 43 data tests, 2 view models
+Done. PASS=48 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=48
+```
 
 ## Intended Analytical Model
 
@@ -379,11 +394,11 @@ Geography remains flexible:
 - values such as `EX` are treated as valid source evidence, not data quality failures
 
 Negative amounts are preserved:
-- the real staged file contains `1659` negative signed amount rows
+- the real staged file contains `1656` negative signed amount rows
 - forcing a non-negative rule here would destroy observed source behavior
 
 `beneficiary_name` remains in the mart grain:
-- in the current real source, `13427` beneficiary IDs map to more than one beneficiary name
+- in the current real source, `13426` beneficiary IDs map to more than one beneficiary name
 - collapsing the mart to month + `beneficiary_id` would merge distinct labels too aggressively
 
 `source_row_number` is only scoped within `source_file_name`:
@@ -396,7 +411,7 @@ Negative amounts are not treated as noise in this repository.
 
 In the implemented `Recebimentos de Recursos por Favorecido` file:
 
-- `1659` rows contain negative signed amounts
+- `1656` rows contain negative signed amounts
 
 The pipeline therefore keeps `amount_received_brl` signed through staging,
 intermediate, and mart layers. The current implementation does not claim a full
@@ -743,7 +758,7 @@ Confirmed profile facts:
 
 - encoding: `latin-1`
 - delimiter: semicolon
-- row count: `300391`
+- row count: `300350` (registered version; see `config/source_manifest.toml`)
 - column count: `12`
 - no null-heavy columns detected in the profiled sample
 
@@ -856,12 +871,32 @@ The mart includes:
 The mart keeps signed amounts and exposes source file and source row-number
 bounds for traceability back to the intermediate and staging layers.
 
+## Running dbt
+
+dbt runs from the `dbt/` folder against the DuckDB file under `data/curated/`.
+Stage the raw file first, then:
+
+```bash
+cp dbt/profiles.yml.example dbt/profiles.yml
+cd dbt
+dbt build --profiles-dir .
+```
+
+`dbt build` loads the seed, builds the staging and intermediate views and the
+mart tables, and runs every data test. Two project vars control the input:
+
+- `recebimentos_staged_parquet`: path to the staged Parquet, relative to `dbt/`
+- `recebimentos_expected_row_count`: expected staged rows; must equal the
+  `row_count` of the registered manifest entry
+
+Override them with `--vars` to build against another staged file.
+
 ## Limitations And Future Work
 
 Current limitations are explicit:
 
 - only one real `recebimentos` file is fully implemented through mart level
-- the dbt CLI could not be executed in the current Python 3.14 environment because of an upstream dependency import error, so dbt model logic was validated directly in DuckDB instead
+- the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
 - organizational and geographic attributes are not part of the first mart grain

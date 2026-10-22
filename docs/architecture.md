@@ -128,7 +128,7 @@ Confirmed `Recebimentos de Recursos por Favorecido` implementation:
 - Scope: `data/raw/202601_RecebimentosRecursosPorFavorecido.csv` plus its matching profile artifact
 - Output: one Parquet file under `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`
 - Grain: one row per raw CSV row
-- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300391` rows, `12` columns, and no null-heavy columns in the profiled sample
+- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300350` rows (registered version; an earlier unhashed version had `300391`), `12` columns, and no null-heavy columns in the profiled sample
 - `Ano e mês do lançamento` is parsed as a monthly key, not a daily timestamp
 - `Valor Recebido` is parsed into `amount_received_brl`
 - Negative `amount_received_brl` values are allowed because they are present in the full staged file
