@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import importlib.util
 import json
 import os
@@ -17,6 +16,12 @@ from gov_spending_analytics.ingestion.portal_transparencia import discover_raw_c
 from gov_spending_analytics.profiling.raw_csv import profile_raw_csv_file, select_raw_csv_file
 from gov_spending_analytics.utils.config import load_project_config
 from gov_spending_analytics.utils.duckdb_bootstrap import bootstrap_duckdb
+
+try:
+    import fcntl
+except ImportError:  # Windows has no fcntl; lock through msvcrt instead.
+    fcntl = None
+    import msvcrt
 
 EXPERIMENTAL_COMMANDS = {"stage-despesas-file", "ingest-despesas-documentos"}
 
@@ -481,8 +486,11 @@ def exclusive_lock(lock_path: Path, parser: argparse.ArgumentParser) -> Iterator
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("w") as handle:
         try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            if fcntl is not None:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
             parser.exit(1, f"Another sync holds {lock_path}; try again when it finishes.\n")
         yield
 

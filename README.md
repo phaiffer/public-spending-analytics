@@ -1021,6 +1021,11 @@ The Portal regenerates its archives shortly after 00:00 UTC (about 21:00 in
 Brasilia), so morning runs pick up the previous evening's files. An advisory
 lock keeps a manual run and a scheduled run from syncing at the same time.
 
+On Windows the sync and the lock work the same way, but there is no installer
+for the schedule: point Task Scheduler at
+`.venv\Scripts\gov-spending.exe sync-recebimentos --dbt-build`, run from the
+repository folder.
+
 A full history download is about 3 GB of archives; staging takes roughly a
 minute per month on a desktop machine, so `--all` from scratch runs for a few
 hours.

@@ -12,10 +12,8 @@ DEFAULT_DBT_PROJECT_DIR = Path("dbt")
 
 def find_dbt_executable() -> str | None:
     """Prefer the dbt installed next to the running interpreter, then PATH."""
-    candidate = Path(sys.executable).parent / "dbt"
-    if candidate.exists():
-        return str(candidate)
-    return shutil.which("dbt")
+    # which() adds .exe on Windows, where the venv keeps it under Scripts\.
+    return shutil.which("dbt", path=str(Path(sys.executable).parent)) or shutil.which("dbt")
 
 
 def run_dbt_build(project_dir: Path = DEFAULT_DBT_PROJECT_DIR) -> int:

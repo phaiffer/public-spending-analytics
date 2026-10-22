@@ -23,7 +23,7 @@ Path: `data/raw/`
 
 Purpose:
 
-- Store manually downloaded source files exactly as received.
+- Store source files exactly as received, whether downloaded by hand or by `gov-spending sync-recebimentos`.
 - Preserve source file names and folder organization.
 - Avoid edits, deduplication, or manual cleaning.
 
@@ -123,12 +123,14 @@ Current staging assumptions:
 
 Confirmed `Recebimentos de Recursos por Favorecido` implementation:
 
-- Command: `gov-spending stage-recebimentos-favorecido-file`
+- Commands: `gov-spending sync-recebimentos` stages every month that has new content; `gov-spending stage-recebimentos-favorecido-file` stages the reviewed January 2026 file by hand; `gov-spending restage-recebimentos` rebuilds every month from the archives already on disk
 - Source family: `recebimentos_recursos_por_favorecido`
-- Scope: `data/raw/202601_RecebimentosRecursosPorFavorecido.csv` plus its matching profile artifact
-- Output: one Parquet file under `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`
+- Scope: every monthly archive the Portal publishes, from `2013-12` to the current month
+- Output: one Parquet file per month under `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`, read by dbt through a glob
 - Grain: one row per raw CSV row
-- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300350` rows (registered version; an earlier unhashed version had `300391`), `12` columns, and no null-heavy columns in the profiled sample
+- Row-count check: each staged file carries `source_registered_row_count`, and dbt compares it with the rows it reads from that file
+- Amount type: `amount_received_brl` is always written as `DECIMAL(18,4)`, so every monthly file shares one schema
+- Source evidence: profiles confirm `latin-1`, semicolon delimiter, and `12` columns; the reviewed January 2026 version has `300350` rows (an earlier unhashed version had `300391`)
 - `Ano e mês do lançamento` is parsed as a monthly key, not a daily timestamp
 - `Valor Recebido` is parsed into `amount_received_brl`
 - Negative `amount_received_brl` values are allowed because they are present in the full staged file
@@ -193,6 +195,13 @@ Confirmed first mart-ready model:
 - Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`; all such IDs are masked CPFs (`beneficiary_identifier_kind = 'cpf_masked'`)
 - Scope decision: organizational and geographic attributes are treated as descriptive upstream context, not as part of the first mart grain
 - Traceability: mart rows retain source file-name bounds and source row-number bounds
+
+Confirmed monthly summary mart:
+
+- Model: `mart_recebimentos_monthly_summary`
+- Grain: one row per month, superior government body id and name, and `beneficiary_identifier_kind`
+- Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
+- Consumer: the Streamlit dashboard, which reads it through short-lived read-only DuckDB connections
 
 ## Intended Flow
 
@@ -289,16 +298,20 @@ Trade-off:
 
 - dbt is not necessary for every small local project. It is included here because the repository is intended to demonstrate analytical modeling discipline, not just file conversion scripts.
 
+## What Is In Place
+
+- Automated downloads for `Recebimentos`: `gov-spending sync-recebimentos`, scheduled by systemd user timers (`scripts/install_sync_timer.sh`, Linux only).
+- A local Streamlit dashboard: `gov-spending dashboard`.
+- CI on GitHub Actions: lint, tests, and `dbt build` on a synthetic sample for Python 3.11 to 3.13.
+
 ## What Is Deferred
 
-- Automated downloads.
-- API ingestion.
+- Broad API ingestion.
+- Automated downloads for source families other than `Recebimentos`.
 - Full schema mapping for all source files.
 - Final fact grain selection.
-- Final mart grain selection.
 - Commitment-liquidation-payment linkage rules.
 - Production-grade data quality framework.
-- Dashboard layer.
-- CI/CD.
+- Hosting the dashboard publicly.
 - Cloud deployment.
-- Workflow orchestration.
+- Workflow orchestration beyond the systemd timers.
