@@ -190,7 +190,7 @@ Confirmed first mart-ready model:
 - Model: `mart_recebimentos_by_beneficiary_month`
 - Grain: one row per month, `beneficiary_id`, and `beneficiary_name`
 - Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
-- Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`
+- Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`; all such IDs are masked CPFs (`beneficiary_identifier_kind = 'cpf_masked'`)
 - Scope decision: organizational and geographic attributes are treated as descriptive upstream context, not as part of the first mart grain
 - Traceability: mart rows retain source file-name bounds and source row-number bounds
 

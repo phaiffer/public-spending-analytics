@@ -17,6 +17,16 @@ typed as (
         cast(source_row_number as bigint) as source_row_number,
 
         cast(beneficiary_id as varchar) as beneficiary_id,
+        -- Shape of beneficiary_id observed in the source. CPFs are published masked
+        -- (only 6 middle digits visible), so one masked value can cover several people.
+        case
+            when regexp_full_match(beneficiary_id, '[0-9]{14}') then 'cnpj'
+            when regexp_full_match(beneficiary_id, '\*\*\*\.[0-9]{3}\.[0-9]{3}-\*\*')
+                then 'cpf_masked'
+            when regexp_full_match(beneficiary_id, 'EX[A-Z0-9]{7}') then 'foreign_code'
+            when regexp_full_match(beneficiary_id, '-[0-9]+') then 'placeholder'
+            else 'other_code'
+        end as beneficiary_identifier_kind,
         cast(beneficiary_name as varchar) as beneficiary_name,
         cast(beneficiary_location_code as varchar) as beneficiary_location_code,
         cast(beneficiary_municipality_name as varchar) as beneficiary_municipality_name,

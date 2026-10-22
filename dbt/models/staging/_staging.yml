@@ -66,6 +66,13 @@ models:
         description: "Beneficiary identifier preserved as text; not assumed to be a CNPJ."
         tests:
           - not_null
+      - name: beneficiary_identifier_kind
+        description: "Shape of beneficiary_id: cnpj (14 digits), cpf_masked (***.NNN.NNN-**), foreign_code (EX-prefixed, exterior beneficiaries), placeholder (negative codes such as -1 SEM INFORMACAO or -11 Sigiloso), or other_code."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "other_code"]
       - name: beneficiary_location_code
         description: "Source location code from Sigla UF; values may include EX for exterior."
         tests:

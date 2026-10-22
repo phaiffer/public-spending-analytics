@@ -36,7 +36,8 @@ Implemented source facts from the real file:
 - staged rows written: `300350`
 - mart rows at beneficiary-month grain: `233654`
 - negative signed amount rows observed: `1656`
-- beneficiary IDs with more than one beneficiary name in the real source: `13426`
+- beneficiary IDs with more than one beneficiary name in the real source: `13426`,
+  all of them masked CPFs (see [Beneficiary Identifier Kinds](#beneficiary-identifier-kinds))
 
 The Portal republished this January 2026 file on 2026-10-10. An earlier,
 unhashed version of the same file had `300391` rows, `1659` negative rows, and
@@ -399,7 +400,8 @@ Negative amounts are preserved:
 
 `beneficiary_name` remains in the mart grain:
 - in the current real source, `13426` beneficiary IDs map to more than one beneficiary name
-- collapsing the mart to month + `beneficiary_id` would merge distinct labels too aggressively
+- every one of them is a masked CPF, which the Portal publishes with only six digits visible
+- collapsing the mart to month + `beneficiary_id` would merge different people into one row
 
 `source_row_number` is only scoped within `source_file_name`:
 - that is safe for the implemented file
@@ -438,9 +440,35 @@ Its grain is one row per:
 `beneficiary_name` is not kept there for decoration. It is part of the grain
 because the real data shows that `beneficiary_id` alone is not stable enough
 for a beneficiary-level mart. In the implemented file, multiple names can
-appear under the same beneficiary ID. Until that identity problem is solved
-with stronger source evidence, `beneficiary_name` must remain in the grain to
-avoid collapsing distinct beneficiary labels into one row.
+appear under the same beneficiary ID.
+
+The cause is now confirmed: all `13426` multi-name IDs are masked CPFs such as
+`***.123.456-**`. The Portal hides the first three and last two digits of
+individual taxpayers' CPFs, so different people can share one masked value.
+No CNPJ (14-digit) identifier has more than one name in this file. The masked
+value plus the name is the best identity the public source offers for
+individuals, and it is still not a guaranteed unique person.
+
+## Beneficiary Identifier Kinds
+
+`beneficiary_identifier_kind` is derived in the dbt staging model from the
+shape of `beneficiary_id` and carried through the intermediate and mart
+layers. It does not change any grain, because it depends only on
+`beneficiary_id`. Counts below are for the registered `300350`-row version:
+
+| Kind | Rule | Rows | Distinct IDs | Multi-name IDs |
+| --- | --- | ---: | ---: | ---: |
+| `cpf_masked` | `***.NNN.NNN-**` | 159943 | 144309 | 13426 |
+| `cnpj` | 14 digits | 135383 | 71570 | 0 |
+| `foreign_code` | `EX` + 7 characters (2508 of 2526 rows have location `EX`) | 2526 | 2466 | 0 |
+| `other_code` | anything else: mostly 6-digit codes that also appear as management unit IDs, plus `RB`/`TN`/`PF` codes | 1584 | 694 | 0 |
+| `placeholder` | negative codes: `-1` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 914 | 4 | 0 |
+
+`placeholder` IDs are not beneficiaries; they label rows where the beneficiary
+is unknown, not applicable, confidential, or a payroll aggregate. Exclude them
+from beneficiary rankings. The dbt test
+`assert_mart_recebimentos_multi_name_ids_are_masked_cpf` warns if any
+non-`cpf_masked` identifier starts showing name collisions in a future file.
 
 ## Key Findings
 
@@ -448,7 +476,10 @@ The current case study supports a few concrete observations from the real
 implemented source:
 
 - the source is analytically usable, but only after careful typing and monthly normalization
-- beneficiary identity is not fully stable at the ID-only level
+- beneficiary identity is not fully stable at the ID-only level, and the
+  instability comes entirely from masked CPFs; CNPJ identifiers are stable
+- placeholder IDs (`-1`, `-9`, `-11`, `-13`) concentrate rows that have no
+  identifiable beneficiary and must be excluded from beneficiary rankings
 - negative signed amounts are part of the real source behavior
 - a conservative mart can still be built without inventing unsupported business logic
 
@@ -460,15 +491,17 @@ pipeline rather than in a polished narrative detached from the data.
 The current mart supports straightforward monthly beneficiary analysis. Example
 queries below assume the mart model has been built in DuckDB/dbt.
 
-Top beneficiaries by signed monthly amount:
+Top beneficiaries by signed monthly amount, excluding placeholder IDs:
 
 ```sql
 select
     launch_month_key,
     beneficiary_id,
+    beneficiary_identifier_kind,
     beneficiary_name,
     total_amount_received_brl
 from mart_recebimentos_by_beneficiary_month
+where beneficiary_identifier_kind != 'placeholder'
 order by total_amount_received_brl desc
 limit 20;
 ```
@@ -507,9 +540,10 @@ Beneficiary-name collisions under the same beneficiary ID:
 select
     launch_month_key,
     beneficiary_id,
+    beneficiary_identifier_kind,
     count(distinct beneficiary_name) as distinct_name_count
 from mart_recebimentos_by_beneficiary_month
-group by 1, 2
+group by 1, 2, 3
 having count(distinct beneficiary_name) > 1
 order by distinct_name_count desc, beneficiary_id;
 ```
