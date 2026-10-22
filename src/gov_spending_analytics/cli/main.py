@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import importlib.util
 import json
+import os
+import subprocess
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -187,6 +190,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--dbt-build",
         action="store_true",
         help="Run dbt build after restaging.",
+    )
+
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Open the Streamlit dashboard over the DuckDB marts (needs the dashboard extra).",
+    )
+    dashboard_parser.add_argument(
+        "--port",
+        type=int,
+        default=8501,
+        help="Local port for the dashboard. Defaults to 8501.",
     )
 
     despesas_documentos_parser = subparsers.add_parser(
@@ -395,6 +409,10 @@ def main() -> None:
         run_restage_recebimentos(args, parser)
         return
 
+    if args.command == "dashboard":
+        run_dashboard(args, parser, Path(config["duckdb"]["database_path"]))
+        return
+
     if args.command == "ingest-despesas-documentos":
         try:
             from gov_spending_analytics.ingestion.portal_transparencia_api import (
@@ -467,6 +485,25 @@ def exclusive_lock(lock_path: Path, parser: argparse.ArgumentParser) -> Iterator
         except BlockingIOError:
             parser.exit(1, f"Another sync holds {lock_path}; try again when it finishes.\n")
         yield
+
+
+def run_dashboard(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, database_path: Path
+) -> None:
+    """Start Streamlit on the dashboard app with the configured DuckDB file."""
+    if importlib.util.find_spec("streamlit") is None:
+        parser.error("Streamlit is not installed; run: uv sync --extra dashboard")
+    app_path = Path(__file__).resolve().parents[1] / "dashboard" / "app.py"
+    environment = {**os.environ, "GOV_SPENDING_DUCKDB": str(database_path.resolve())}
+    command = [
+        sys.executable, "-m", "streamlit", "run", str(app_path),
+        "--server.port", str(args.port),
+        # Local only by default; publishing the page is a deliberate deployment step.
+        "--server.address", "localhost",
+        # Without a terminal (background, systemd) skip the browser and first-run prompt.
+        "--server.headless", "false" if sys.stdin.isatty() else "true",
+    ]
+    sys.exit(subprocess.run(command, env=environment, check=False).returncode)
 
 
 def print_month_result(result) -> None:

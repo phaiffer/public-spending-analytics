@@ -1,0 +1,16 @@
+# Streamlit settings for the dashboard (read when Streamlit starts from the repo root).
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+# Accent per theme. A plain [theme] section would replace Streamlit's light and
+# dark themes with a single light one; [theme.light] and [theme.dark] keep both,
+# so the page follows the viewer's preference.
+[theme.light]
+primaryColor = "#2a78d6"
+
+[theme.dark]
+primaryColor = "#3987e5"
