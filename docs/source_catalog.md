@@ -69,6 +69,28 @@ Version history:
 - On 2026-10-10 the Portal republished the January 2026 archive. The version
   retrieved on 2026-10-21 has `300350` rows and is the one registered in the
   manifest. Staging refuses any other version until it is registered.
+- On 2026-10-22 `gov-spending sync-recebimentos` downloaded the same archive again;
+  its CSV hashed to the registered `340d14e6...c39e`.
+
+Publication behavior observed on the download server (2026-10-22):
+
+- Archive URL pattern:
+  `https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/despesas-favorecidos/YYYYMM_Despesas.zip`
+- Months published: 2013-12 (688 rows) through the current month; the next month
+  is not published until it starts.
+- Every archive holds only `YYYYMM_RecebimentosRecursosPorFavorecido.csv` with the
+  same 12-column header as January 2026.
+- `Last-Modified` showed 2026-02 through the current month regenerated that day
+  (00:16 UTC), together with scattered older months (for example 2016-12 and
+  2020-04); the rest carried dates spread across 2026 (2026-01 on 2026-10-10,
+  2014-01 in April). No month can be
+  assumed final, so the sync job compares server metadata and content hashes.
+- The server sits behind an AWS WAF: after about 170 requests in a few minutes it
+  answered every request with HTTP 405 and `x-amzn-waf-action: captcha`.
+
+Synced months are registered in `data/sync/recebimentos_source_manifest.toml`
+(machine written, not committed) with the same fields as the reviewed manifest
+plus `archive_size_bytes` and `is_open_month`.
 
 Confirmed observed columns and staging mappings:
 
@@ -236,11 +258,14 @@ Known caveats:
 
 For the MVP:
 
-1. Download files manually from official Portal da Transparencia pages.
-2. Store raw downloads under `data/raw/`.
+1. Download Recebimentos files with `gov-spending sync-recebimentos`, which checks
+   the server politely, stores each download in a new folder, and registers each
+   content version by SHA-256; other families are still downloaded manually from
+   official Portal da Transparencia pages.
+2. Store raw downloads under `data/raw/` and treat them as untrusted input.
 3. Do not commit raw files to git.
-4. Register each staged file version in `config/source_manifest.toml` with its source
-   page, archive URL, SHA-256, size, row count, and retrieval date.
+4. Register each manually staged file version in `config/source_manifest.toml` with
+   its source page, archive URL, SHA-256, size, row count, and retrieval date.
 5. Avoid broad API-first design; use the API only for targeted, filtered extraction.
 6. Run local profiling before committing schema-specific ingestion logic.
 

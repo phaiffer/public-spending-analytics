@@ -197,10 +197,10 @@ Confirmed first mart-ready model:
 ## Intended Flow
 
 ```text
-Manual source download
+gov-spending sync-recebimentos (daily timer) or manual source download
         |
         v
-data/raw/
+data/raw/  +  data/sync/ (versions by SHA-256)
         |
         v
 Python source profiling
@@ -222,7 +222,13 @@ dbt transformations
         |
         v
 curated analytical tables
+        |
+        v
+Streamlit dashboard (gov-spending dashboard, read-only)
 ```
+
+Recebimentos runs this flow per month: one staged Parquet per month, read by dbt
+through a glob, rebuilt whenever the sync job stages a new content version.
 
 ## Future Core Model
 
