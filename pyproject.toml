@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,10 @@ name = "gov-spending-analytics"
 version = "0.1.0"
 description = "Local-first analytics foundation for Brazilian federal public spending data."
 readme = "README.md"
-requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+# <3.14: the dbt CLI (dbt-duckdb) failed on Python 3.14 with an upstream import error
+requires-python = ">=3.11,<3.14"
 authors = [
   { name = "PhaifferTech" }
 ]
@@ -36,3 +39,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# One synthetic source row per line reads better than wrapped tuples.
+"tests/fixtures/make_recebimentos_sample.py" = ["E501"]

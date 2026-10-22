@@ -4,6 +4,7 @@ select
     launch_year,
     launch_month_number,
     beneficiary_id,
+    beneficiary_identifier_kind,
     beneficiary_name,
     sum(total_amount_received_brl) as total_amount_received_brl,
     sum(record_count) as total_record_count,
@@ -19,4 +20,5 @@ group by
     launch_year,
     launch_month_number,
     beneficiary_id,
+    beneficiary_identifier_kind,
     beneficiary_name

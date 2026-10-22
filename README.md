@@ -1,5 +1,7 @@
 # Brazilian Federal Public Spending Analytics
 
+[![CI](https://github.com/phaiffer/public-spending-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/phaiffer/public-spending-analytics/actions/workflows/ci.yml)
+
 Standalone portfolio repository for building a local-first analytical foundation over Brazilian federal public spending data from official public sources.
 
 This repository is currently centered on one real implemented analytical case
@@ -25,16 +27,24 @@ What is real in the current pipeline:
 - one real dbt staging model was connected to DuckDB
 - one conservative intermediate monthly model was built
 - one first mart-ready monthly model was built
+- `dbt build` runs end to end through the dbt CLI (48 nodes: models, seed, and data tests)
 
 Implemented source facts from the real file:
 
-- file: `202601_RecebimentosRecursosPorFavorecido.csv`
-- profiled rows: `300391`
+- file: `202601_RecebimentosRecursosPorFavorecido.csv`, version retrieved on
+  2026-10-21 and pinned by SHA-256 in `config/source_manifest.toml`
+- profiled rows: `300350`
 - profiled columns: `12`
-- staged rows written: `300391`
-- mart rows at beneficiary-month grain: `233666`
-- negative signed amount rows observed: `1659`
-- beneficiary IDs with more than one beneficiary name in the real source: `13427`
+- staged rows written: `300350`
+- mart rows at beneficiary-month grain: `233654`
+- negative signed amount rows observed: `1656`
+- beneficiary IDs with more than one beneficiary name in the real source: `13426`,
+  all of them masked CPFs (see [Beneficiary Identifier Kinds](#beneficiary-identifier-kinds))
+
+The Portal republished this January 2026 file on 2026-10-10. An earlier,
+unhashed version of the same file had `300391` rows, `1659` negative rows, and
+`233666` mart rows; the screenshots and Excel samples below come from that
+earlier run.
 
 ## Why This Project Matters
 
@@ -278,7 +288,15 @@ Mart-layer SQL preview
 
 The repository includes evidence across the raw-source, profiling, staged
 Parquet, and mart SQL layers, with the strongest pipeline checkpoints shown
-here.
+here. These screenshots were captured on the earlier `300391`-row version of
+the source file.
+
+`dbt build` result against the registered `300350`-row version (2026-10-21):
+
+```text
+Finished running 1 seed, 2 table models, 43 data tests, 2 view models
+Done. PASS=48 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=48
+```
 
 ## Intended Analytical Model
 
@@ -379,12 +397,13 @@ Geography remains flexible:
 - values such as `EX` are treated as valid source evidence, not data quality failures
 
 Negative amounts are preserved:
-- the real staged file contains `1659` negative signed amount rows
+- the real staged file contains `1656` negative signed amount rows
 - forcing a non-negative rule here would destroy observed source behavior
 
 `beneficiary_name` remains in the mart grain:
-- in the current real source, `13427` beneficiary IDs map to more than one beneficiary name
-- collapsing the mart to month + `beneficiary_id` would merge distinct labels too aggressively
+- in the current real source, `13426` beneficiary IDs map to more than one beneficiary name
+- every one of them is a masked CPF, which the Portal publishes with only six digits visible
+- collapsing the mart to month + `beneficiary_id` would merge different people into one row
 
 `source_row_number` is only scoped within `source_file_name`:
 - that is safe for the implemented file
@@ -396,7 +415,7 @@ Negative amounts are not treated as noise in this repository.
 
 In the implemented `Recebimentos de Recursos por Favorecido` file:
 
-- `1659` rows contain negative signed amounts
+- `1656` rows contain negative signed amounts
 
 The pipeline therefore keeps `amount_received_brl` signed through staging,
 intermediate, and mart layers. The current implementation does not claim a full
@@ -423,9 +442,35 @@ Its grain is one row per:
 `beneficiary_name` is not kept there for decoration. It is part of the grain
 because the real data shows that `beneficiary_id` alone is not stable enough
 for a beneficiary-level mart. In the implemented file, multiple names can
-appear under the same beneficiary ID. Until that identity problem is solved
-with stronger source evidence, `beneficiary_name` must remain in the grain to
-avoid collapsing distinct beneficiary labels into one row.
+appear under the same beneficiary ID.
+
+The cause is now confirmed: all `13426` multi-name IDs are masked CPFs such as
+`***.123.456-**`. The Portal hides the first three and last two digits of
+individual taxpayers' CPFs, so different people can share one masked value.
+No CNPJ (14-digit) identifier has more than one name in this file. The masked
+value plus the name is the best identity the public source offers for
+individuals, and it is still not a guaranteed unique person.
+
+## Beneficiary Identifier Kinds
+
+`beneficiary_identifier_kind` is derived in the dbt staging model from the
+shape of `beneficiary_id` and carried through the intermediate and mart
+layers. It does not change any grain, because it depends only on
+`beneficiary_id`. Counts below are for the registered `300350`-row version:
+
+| Kind | Rule | Rows | Distinct IDs | Multi-name IDs |
+| --- | --- | ---: | ---: | ---: |
+| `cpf_masked` | `***.NNN.NNN-**` | 159943 | 144309 | 13426 |
+| `cnpj` | 14 digits | 135383 | 71570 | 0 |
+| `foreign_code` | `EX` + 7 characters (2508 of 2526 rows have location `EX`) | 2526 | 2466 | 0 |
+| `other_code` | anything else: mostly 6-digit codes that also appear as management unit IDs, plus `RB`/`TN`/`PF` codes | 1584 | 694 | 0 |
+| `placeholder` | negative codes: `-1` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 914 | 4 | 0 |
+
+`placeholder` IDs are not beneficiaries; they label rows where the beneficiary
+is unknown, not applicable, confidential, or a payroll aggregate. Exclude them
+from beneficiary rankings. The dbt test
+`assert_mart_recebimentos_multi_name_ids_are_masked_cpf` warns if any
+non-`cpf_masked` identifier starts showing name collisions in a future file.
 
 ## Key Findings
 
@@ -433,7 +478,10 @@ The current case study supports a few concrete observations from the real
 implemented source:
 
 - the source is analytically usable, but only after careful typing and monthly normalization
-- beneficiary identity is not fully stable at the ID-only level
+- beneficiary identity is not fully stable at the ID-only level, and the
+  instability comes entirely from masked CPFs; CNPJ identifiers are stable
+- placeholder IDs (`-1`, `-9`, `-11`, `-13`) concentrate rows that have no
+  identifiable beneficiary and must be excluded from beneficiary rankings
 - negative signed amounts are part of the real source behavior
 - a conservative mart can still be built without inventing unsupported business logic
 
@@ -445,15 +493,17 @@ pipeline rather than in a polished narrative detached from the data.
 The current mart supports straightforward monthly beneficiary analysis. Example
 queries below assume the mart model has been built in DuckDB/dbt.
 
-Top beneficiaries by signed monthly amount:
+Top beneficiaries by signed monthly amount, excluding placeholder IDs:
 
 ```sql
 select
     launch_month_key,
     beneficiary_id,
+    beneficiary_identifier_kind,
     beneficiary_name,
     total_amount_received_brl
 from mart_recebimentos_by_beneficiary_month
+where beneficiary_identifier_kind != 'placeholder'
 order by total_amount_received_brl desc
 limit 20;
 ```
@@ -492,9 +542,10 @@ Beneficiary-name collisions under the same beneficiary ID:
 select
     launch_month_key,
     beneficiary_id,
+    beneficiary_identifier_kind,
     count(distinct beneficiary_name) as distinct_name_count
 from mart_recebimentos_by_beneficiary_month
-group by 1, 2
+group by 1, 2, 3
 having count(distinct beneficiary_name) > 1
 order by distinct_name_count desc, beneficiary_id;
 ```
@@ -518,21 +569,37 @@ limit 20;
 
 This foundation does not require real data to install.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+Supported Python versions: 3.11 to 3.13 (`.python-version` pins 3.12). Python
+3.14 is excluded because the dbt CLI (`dbt-duckdb`) failed to import on it.
+
+Recommended setup with [uv](https://docs.astral.sh/uv/), which installs the
+exact dependency versions recorded in `uv.lock`:
+
+```bash
+uv sync --extra dev
+source .venv/bin/activate
+```
+
+Without uv, a plain virtual environment also works, but resolves dependency
+versions at install time instead of using the lock file:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-Check the CLI placeholder:
+On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1` instead.
 
-```powershell
+Check the CLI:
+
+```bash
 gov-spending --help
 ```
 
 Create a local DuckDB database placeholder:
 
-```powershell
+```bash
 gov-spending bootstrap-duckdb
 ```
 
@@ -540,10 +607,10 @@ gov-spending bootstrap-duckdb
 
 This repository does not download Portal da Transparencia files automatically. Download one official spending CSV manually and keep the original file name.
 
-Recommended Windows folder pattern:
+Recommended folder pattern:
 
-```powershell
-New-Item -ItemType Directory -Force -Path data\raw\portal_transparencia\despesas\2025\01
+```bash
+mkdir -p data/raw/portal_transparencia/despesas/2025/01
 ```
 
 Place one downloaded file under that folder, for example:
@@ -554,19 +621,19 @@ data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 
 List discovered raw CSV files:
 
-```powershell
+```bash
 gov-spending list-raw-files
 ```
 
 Profile one selected file:
 
-```powershell
-gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending profile-raw-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 Or select by a filename substring when exactly one file matches:
 
-```powershell
+```bash
 gov-spending profile-raw-file --pattern Pagamento
 ```
 
@@ -583,7 +650,13 @@ The profiling command writes a JSON summary under `profiling/` by default. The o
 
 Profiling outputs may include sampled public records, so generated JSON files are ignored by git by default. Review them before deciding whether to publish a summarized version.
 
-## API Despesas Documentos Ingestion Workflow
+## Experimental: API Despesas Documentos Ingestion Workflow
+
+> **Experimental.** The `Despesas` paths (this API ingestion and the CSV
+> staging below) are not part of the implemented case study. They have not
+> been run end to end against a real downloaded file in this repository, no
+> enabled dbt model reads their output, and they are not covered by the CI
+> pipeline test. Treat their behavior as provisional.
 
 The project supports a narrow official API extraction path for raw Portal da
 Transparencia `despesas/documentos` responses. This is local-first raw
@@ -612,16 +685,16 @@ Observed endpoint constraints:
 Configure an API key by registering at the Portal da Transparencia API page and
 setting the environment variable named in `config/project.toml`:
 
-```powershell
-$env:PORTAL_TRANSPARENCIA_API_KEY = "<your-api-key>"
+```bash
+export PORTAL_TRANSPARENCIA_API_KEY="<your-api-key>"
 ```
 
 Run a narrow extraction:
 
-```powershell
-gov-spending ingest-despesas-documentos `
-  --data-emissao 02/01/2025 `
-  --fase 3 `
+```bash
+gov-spending ingest-despesas-documentos \
+  --data-emissao 02/01/2025 \
+  --fase 3 \
   --unidade-gestora <VALUE>
 ```
 
@@ -648,28 +721,39 @@ What remains provisional:
 - the first API path covers only `despesas/documentos`, not every Portal da Transparencia endpoint
 - valid `unidadeGestora` and `gestao` values must come from official/source context before live extraction
 
-## First Staging Workflow
+## Experimental: Despesas CSV Staging Workflow
+
+> **Experimental.** The `Despesas` paths (this API ingestion and the CSV
+> staging below) are not part of the implemented case study. They have not
+> been run end to end against a real downloaded file in this repository, no
+> enabled dbt model reads their output, and they are not covered by the CI
+> pipeline test. Treat their behavior as provisional.
+
+> Known risk: this path rejects negative `amount_brl` values. The implemented
+> recebimentos source contains real negative amounts (`1656` rows), so a real
+> `Despesas` file with reversals may fail staging. Revisit that rule with a real
+> profile before relying on this path.
 
 The first staging command is limited to one Portal da Transparencia `Despesas` CSV and its matching profile artifact. It validates that the raw CSV header still matches the profiled columns before writing Parquet.
 
 Run profiling first:
 
-```powershell
-gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending profile-raw-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 Then stage that same file:
 
-```powershell
-gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending stage-despesas-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 If the profile artifact is stored somewhere else, pass it explicitly:
 
-```powershell
-gov-spending stage-despesas-file `
-  --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv `
-  --profile profiling\20250101_Despesas_Pagamento_profile.json
+```bash
+gov-spending stage-despesas-file \
+  --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv \
+  --profile profiling/20250101_Despesas_Pagamento_profile.json
 ```
 
 Default output pattern:
@@ -709,7 +793,7 @@ Before writing Parquet, staging now runs lightweight checks tied to the observed
 and staged output:
 
 - required staged columns exist and are populated
-- `amount_brl` values are non-negative
+- `amount_brl` values are non-negative (provisional; see the known risk above)
 - source traceability fields exist and are populated
 - `source_row_number` remains positive
 
@@ -727,13 +811,28 @@ Confirmed profile facts:
 
 - encoding: `latin-1`
 - delimiter: semicolon
-- row count: `300391`
+- row count: `300350` (registered version; see `config/source_manifest.toml`)
 - column count: `12`
 - no null-heavy columns detected in the profiled sample
 
+Download it from the official page, which redirects to a ZIP containing only
+this CSV:
+
+```text
+https://portaldatransparencia.gov.br/download-de-dados/despesas-favorecidos/202601
+```
+
+The exact file version is registered in `config/source_manifest.toml` by
+SHA-256, together with its size, row count, archive URL, and retrieval date.
+Staging hashes the raw file and refuses it unless the name and hash match a
+registered entry, and the expected row count comes from that entry. The Portal
+does republish past months (the January 2026 archive was republished on
+2026-10-10), so a new download may need to be registered before it can be
+staged.
+
 Run staging:
 
-```powershell
+```bash
 gov-spending stage-recebimentos-favorecido-file
 ```
 
@@ -825,12 +924,60 @@ The mart includes:
 The mart keeps signed amounts and exposes source file and source row-number
 bounds for traceability back to the intermediate and staging layers.
 
+## Running dbt
+
+dbt runs from the `dbt/` folder against the DuckDB file under `data/curated/`.
+Stage the raw file first, then:
+
+```bash
+cp dbt/profiles.yml.example dbt/profiles.yml
+cd dbt
+dbt build --profiles-dir .
+```
+
+`dbt build` loads the seed, builds the staging and intermediate views and the
+mart tables, and runs every data test. Two project vars control the input:
+
+- `recebimentos_staged_parquet`: path to the staged Parquet, relative to `dbt/`
+- `recebimentos_expected_row_count`: expected staged rows; must equal the
+  `row_count` of the registered manifest entry
+
+Override them with `--vars` to build against another staged file.
+
+## End-To-End Test On A Synthetic Sample
+
+The real source file is not committed, so the full pipeline is also exercised
+on a 16-row synthetic sample:
+
+```text
+tests/fixtures/recebimentos_sample/202601_RecebimentosRecursosPorFavorecido.csv
+```
+
+It keeps the official format (latin-1, semicolon delimiter, quoted fields,
+CRLF line endings, `MM/YYYY` months, Brazilian decimals) and covers every
+beneficiary identifier kind, negative amounts, an `EX` / exterior beneficiary,
+and one masked-CPF name collision. Beneficiary names and identifiers are
+fictitious. It is pinned by its own manifest, `tests/fixtures/source_manifest.toml`,
+and regenerated with `tests/fixtures/make_recebimentos_sample.py`.
+
+`tests/test_recebimentos_e2e.py` profiles the sample, stages it, runs
+`dbt build` into a temporary DuckDB file, and checks the identifier kinds,
+mart row count, and collision result:
+
+```bash
+pytest tests/test_recebimentos_e2e.py
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check`, the full pytest
+suite, and therefore this sample `dbt build`, on Python 3.11, 3.12, and 3.13
+with the dependency versions locked in `uv.lock`.
+
 ## Limitations And Future Work
 
 Current limitations are explicit:
 
 - only one real `recebimentos` file is fully implemented through mart level
-- the dbt CLI could not be executed in the current Python 3.14 environment because of an upstream dependency import error, so dbt model logic was validated directly in DuckDB instead
+- the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
 - organizational and geographic attributes are not part of the first mart grain
@@ -859,4 +1006,9 @@ are included as supporting material.
 
 ## License
 
-No license has been selected yet. Add one before publishing or reusing this repository broadly.
+The code and documentation in this repository are released under the
+[MIT License](LICENSE), Copyright (c) 2026 PhaifferTech.
+
+The source data is not part of this repository. It is published by the
+Controladoria-Geral da Uniao through the Portal da Transparencia and remains
+subject to that portal's own terms of use.

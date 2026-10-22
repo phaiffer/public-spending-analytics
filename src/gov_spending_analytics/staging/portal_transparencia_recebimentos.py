@@ -10,6 +10,10 @@ from typing import Any
 
 import pandas as pd
 
+from gov_spending_analytics.ingestion.source_manifest import (
+    DEFAULT_MANIFEST_PATH,
+    resolve_source_file_entry,
+)
 from gov_spending_analytics.quality.basic_checks import (
     check_required_columns,
     check_source_traceability,
@@ -38,6 +42,7 @@ TRACEABILITY_COLUMNS = (
     "source_family",
     "source_file_name",
     "source_file_path",
+    "source_file_sha256",
     "source_profile_name",
     "source_row_number",
 )
@@ -78,6 +83,7 @@ class RecebimentosStagingResult:
     output_path: Path
     row_count: int
     source_file: Path
+    source_file_sha256: str
     profile_path: Path
     source_family: str
     column_mapping: dict[str, str]
@@ -87,13 +93,27 @@ def stage_recebimentos_recursos_por_favorecido_csv(
     file_path: Path,
     profile_path: Path,
     output_path: Path | None = None,
+    manifest_path: Path = DEFAULT_MANIFEST_PATH,
 ) -> RecebimentosStagingResult:
-    """Stage the profiled recebimentos por favorecido CSV into one Parquet file."""
+    """Stage the profiled recebimentos por favorecido CSV into one Parquet file.
+
+    The raw file must be registered in the source manifest; its expected row count
+    comes from the matching manifest entry, not from a constant in code.
+    """
     file_path = file_path.resolve()
     profile_path = profile_path.resolve()
 
+    source_entry = resolve_source_file_entry(
+        file_path=file_path,
+        source_family=SOURCE_FAMILY,
+        manifest_path=manifest_path,
+    )
     profile = load_profile(profile_path)
-    validate_profile(profile=profile, file_path=file_path)
+    validate_profile(
+        profile=profile,
+        file_path=file_path,
+        expected_row_count=source_entry.row_count,
+    )
 
     metadata = profile["profile_metadata"]
     if output_path is None:
@@ -116,6 +136,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
             raw_chunk=raw_chunk,
             file_path=file_path,
             profile_path=profile_path,
+            source_file_sha256=source_entry.sha256,
             first_row_number=next_row_number,
         )
         staged_chunks.append(staged_chunk)
@@ -126,6 +147,11 @@ def stage_recebimentos_recursos_por_favorecido_csv(
     else:
         staged = build_empty_staged_frame()
 
+    if len(staged) != source_entry.row_count:
+        raise ValueError(
+            f"Staged {len(staged)} rows, but the source manifest registers "
+            f"{source_entry.row_count} rows for {file_path.name}"
+        )
     validate_staged_data(staged)
     staged.to_parquet(output_path, index=False)
 
@@ -133,6 +159,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
         output_path=output_path,
         row_count=len(staged),
         source_file=file_path,
+        source_file_sha256=source_entry.sha256,
         profile_path=profile_path,
         source_family=SOURCE_FAMILY,
         column_mapping=SOURCE_TO_STAGED_COLUMNS,
@@ -146,7 +173,11 @@ def load_profile(profile_path: Path) -> dict[str, Any]:
     return json.loads(profile_path.read_text(encoding="utf-8"))
 
 
-def validate_profile(profile: dict[str, Any], file_path: Path) -> None:
+def validate_profile(
+    profile: dict[str, Any],
+    file_path: Path,
+    expected_row_count: int,
+) -> None:
     """Validate the profile against the confirmed recebimentos source facts."""
     metadata = profile.get("profile_metadata", {})
     if metadata.get("file_name") and metadata["file_name"] != file_path.name:
@@ -166,8 +197,11 @@ def validate_profile(profile: dict[str, Any], file_path: Path) -> None:
                 f"Expected profile metadata {field}={expected_value!r}, got {actual_value!r}"
             )
 
-    if profile.get("row_count") != 300391:
-        raise ValueError("Profile row_count does not match the confirmed source file")
+    if profile.get("row_count") != expected_row_count:
+        raise ValueError(
+            f"Profile row_count {profile.get('row_count')} does not match the "
+            f"{expected_row_count} rows registered in the source manifest"
+        )
     if profile.get("column_count") != len(EXPECTED_COLUMNS):
         raise ValueError("Profile column_count does not match the confirmed schema")
     if profile.get("columns") != EXPECTED_COLUMNS:
@@ -214,6 +248,7 @@ def build_staged_chunk(
     raw_chunk: pd.DataFrame,
     file_path: Path,
     profile_path: Path,
+    source_file_sha256: str,
     first_row_number: int,
 ) -> pd.DataFrame:
     """Build one staged dataframe chunk from source columns."""
@@ -225,6 +260,7 @@ def build_staged_chunk(
             "source_family": SOURCE_FAMILY,
             "source_file_name": file_path.name,
             "source_file_path": str(file_path),
+            "source_file_sha256": source_file_sha256,
             "source_profile_name": profile_path.name,
             "source_row_number": range(first_row_number, first_row_number + row_count),
         }

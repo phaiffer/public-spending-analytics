@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: lint, tests and dbt build (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      # Includes tests/test_recebimentos_e2e.py, which profiles and stages the
+      # synthetic sample and runs dbt build against it.
+      - name: Tests and dbt build on the synthetic sample
+        run: uv run pytest -v

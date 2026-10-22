@@ -50,14 +50,25 @@ The Portal documentation describes the API as appropriate for filtered subsets a
 ### Recebimento de recursos por favorecido
 
 - Profiled file: `202601_RecebimentosRecursosPorFavorecido.csv`
+- Download page: <https://portaldatransparencia.gov.br/download-de-dados/despesas-favorecidos/202601>
+  (redirects to `202601_Despesas.zip`, which contains only this CSV)
+- Registered version: `config/source_manifest.toml` (SHA-256, size, row count, retrieval date)
 - Profile artifact: `profiling/202601_RecebimentosRecursosPorFavorecido_profile.json`
 - Source family in staging: `recebimentos_recursos_por_favorecido`
 - Encoding: `latin-1`
 - Delimiter: semicolon
-- Row count: `300391`
+- Row count: `300350` (registered version retrieved 2026-10-21)
 - Column count: `12`
 - Null-heavy columns in profiled sample: none
 - Current staging command: `gov-spending stage-recebimentos-favorecido-file`
+
+Version history:
+
+- The first profiling run (before the manifest existed) observed `300391` rows. That
+  file version was not hashed and is no longer published.
+- On 2026-10-10 the Portal republished the January 2026 archive. The version
+  retrieved on 2026-10-21 has `300350` rows and is the one registered in the
+  manifest. Staging refuses any other version until it is registered.
 
 Confirmed observed columns and staging mappings:
 
@@ -104,7 +115,8 @@ Confirmed first mart layer:
 - Model: `mart_recebimentos_by_beneficiary_month`
 - Grain: one row per `launch_month_key`, `beneficiary_id`, and `beneficiary_name`
 - Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
-- `beneficiary_name` remains in the mart grain because the real data shows multiple names under the same `beneficiary_id`
+- `beneficiary_name` remains in the mart grain because the real data shows multiple names under the same `beneficiary_id`; all `13426` such IDs are masked CPFs
+- `beneficiary_identifier_kind` classifies IDs as `cnpj`, `cpf_masked`, `foreign_code`, `placeholder`, or `other_code`
 - Organizational and geographic attributes remain available in the intermediate layer instead of being forced into the first mart grain
 
 ## MVP Candidate Dataset 1
@@ -140,6 +152,11 @@ Known caveats:
 - File sizes can be large; ingestion should support chunked reads in later implementation.
 
 ### Current Profiling And Staging Status
+
+Status: experimental. The `Despesas` staging path and the API ingestion path
+have not been run against a real downloaded file in this repository, and the
+non-negative `amount_brl` staging check is provisional because the implemented
+recebimentos source contains real negative amounts.
 
 Real `Despesas` raw files and generated profile JSON files are local-only and ignored by git. The first staging implementation reads the local profile artifact and treats its `columns` list as the source of truth for observed columns.
 
@@ -222,7 +239,8 @@ For the MVP:
 1. Download files manually from official Portal da Transparencia pages.
 2. Store raw downloads under `data/raw/`.
 3. Do not commit raw files to git.
-4. Document the download date, selected filters, and source page in future metadata files.
+4. Register each staged file version in `config/source_manifest.toml` with its source
+   page, archive URL, SHA-256, size, row count, and retrieval date.
 5. Avoid broad API-first design; use the API only for targeted, filtered extraction.
 6. Run local profiling before committing schema-specific ingestion logic.
 
@@ -275,8 +293,8 @@ The `spending_stage` field is expected to come from the file context or source-s
 
 Command:
 
-```powershell
-gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\YYYY\MM\<official Despesas file>.csv
+```bash
+gov-spending stage-despesas-file --file data/raw/portal_transparencia/despesas/YYYY/MM/<official Despesas file>.csv
 ```
 
 Default output:

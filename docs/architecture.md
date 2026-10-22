@@ -128,7 +128,7 @@ Confirmed `Recebimentos de Recursos por Favorecido` implementation:
 - Scope: `data/raw/202601_RecebimentosRecursosPorFavorecido.csv` plus its matching profile artifact
 - Output: one Parquet file under `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`
 - Grain: one row per raw CSV row
-- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300391` rows, `12` columns, and no null-heavy columns in the profiled sample
+- Source evidence: profile confirms `latin-1`, semicolon delimiter, `300350` rows (registered version; an earlier unhashed version had `300391`), `12` columns, and no null-heavy columns in the profiled sample
 - `Ano e mês do lançamento` is parsed as a monthly key, not a daily timestamp
 - `Valor Recebido` is parsed into `amount_received_brl`
 - Negative `amount_received_brl` values are allowed because they are present in the full staged file
@@ -190,7 +190,7 @@ Confirmed first mart-ready model:
 - Model: `mart_recebimentos_by_beneficiary_month`
 - Grain: one row per month, `beneficiary_id`, and `beneficiary_name`
 - Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
-- Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`
+- Grain decision: `beneficiary_name` remains part of the grain because the real source contains multiple names for the same `beneficiary_id`; all such IDs are masked CPFs (`beneficiary_identifier_kind = 'cpf_masked'`)
 - Scope decision: organizational and geographic attributes are treated as descriptive upstream context, not as part of the first mart grain
 - Traceability: mart rows retain source file-name bounds and source row-number bounds
 

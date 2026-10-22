@@ -1,0 +1,13 @@
+# Source manifest for the synthetic e2e sample. Regenerate the sample with
+# tests/fixtures/make_recebimentos_sample.py and update sha256, size_bytes and
+# row_count here whenever its rows change.
+
+[[files]]
+file_name = "202601_RecebimentosRecursosPorFavorecido.csv"
+source_family = "recebimentos_recursos_por_favorecido"
+reference_month = "2026-01"
+retrieved_at = "synthetic"
+sha256 = "05bd6f9480d25c7660b4950dc4046164321cced118753f00065ed327034dea6d"
+size_bytes = 3659
+row_count = 16
+column_count = 12

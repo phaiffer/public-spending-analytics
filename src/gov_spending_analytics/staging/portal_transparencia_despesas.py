@@ -1,4 +1,8 @@
-"""Stage one profiled Portal da Transparencia despesas CSV into Parquet."""
+"""Stage one profiled Portal da Transparencia despesas CSV into Parquet.
+
+Experimental: not yet run against a real downloaded file, and the non-negative
+amount check is provisional (the recebimentos source has real negative amounts).
+"""
 
 from __future__ import annotations
 

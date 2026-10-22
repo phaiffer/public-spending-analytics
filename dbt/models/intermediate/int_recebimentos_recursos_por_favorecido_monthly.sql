@@ -14,6 +14,7 @@ monthly as (
         launch_month_number,
 
         beneficiary_id,
+        beneficiary_identifier_kind,
         beneficiary_name,
         beneficiary_location_code,
         beneficiary_municipality_name,
@@ -36,6 +37,7 @@ monthly as (
         launch_year,
         launch_month_number,
         beneficiary_id,
+        beneficiary_identifier_kind,
         beneficiary_name,
         beneficiary_location_code,
         beneficiary_municipality_name,

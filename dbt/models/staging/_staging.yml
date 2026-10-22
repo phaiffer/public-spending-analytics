@@ -7,7 +7,7 @@ sources:
       - name: recebimentos_recursos_por_favorecido
         description: "Staged Recebimentos de Recursos por Favorecido Parquet file for 2026-01."
         config:
-          external_location: "read_parquet('../data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/202601_RecebimentosRecursosPorFavorecido.parquet')"
+          external_location: "read_parquet('{{ var(\"recebimentos_staged_parquet\") }}')"
         columns:
           - name: source_file_name
             description: "Original raw CSV file name."
@@ -32,7 +32,8 @@ models:
         description: "Normalized spending stage."
         tests:
           - accepted_values:
-              values: ["commitment", "liquidation", "payment"]
+              arguments:
+                values: ["commitment", "liquidation", "payment"]
       - name: amount_brl
         description: "Spending amount in Brazilian reais."
 
@@ -44,13 +45,15 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ["portal_transparencia"]
+              arguments:
+                values: ["portal_transparencia"]
       - name: source_family
         description: "Source family label assigned by the Python staging job."
         tests:
           - not_null
           - accepted_values:
-              values: ["recebimentos_recursos_por_favorecido"]
+              arguments:
+                values: ["recebimentos_recursos_por_favorecido"]
       - name: source_file_name
         description: "Original raw CSV file name."
         tests:
@@ -63,6 +66,13 @@ models:
         description: "Beneficiary identifier preserved as text; not assumed to be a CNPJ."
         tests:
           - not_null
+      - name: beneficiary_identifier_kind
+        description: "Shape of beneficiary_id: cnpj (14 digits), cpf_masked (***.NNN.NNN-**), foreign_code (EX-prefixed, exterior beneficiaries), placeholder (negative codes such as -1 SEM INFORMACAO or -11 Sigiloso), or other_code."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "other_code"]
       - name: beneficiary_location_code
         description: "Source location code from Sigla UF; values may include EX for exterior."
         tests:

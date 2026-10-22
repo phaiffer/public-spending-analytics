@@ -8,6 +8,11 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Packaging build artifacts
+*.egg-info/
+build/
+dist/
+
 # Virtual environments
 .venv/
 venv/
@@ -37,6 +42,7 @@ dbt/target/
 dbt/dbt_packages/
 dbt/logs/
 dbt/profiles.yml
+dbt/.user.yml
 
 # Editor and OS
 .vscode/
