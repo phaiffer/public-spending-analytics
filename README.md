@@ -1133,13 +1133,14 @@ headline total includes the Treasury movements under `other_code` (see
 [Key Findings](#key-findings)); clear that kind to look at payments to
 beneficiaries.
 
-Full history, light theme:
+The default view, the last 13 months of the synced history (October 2025 to
+the open October 2026), light theme:
 
-<img src="docs/assets/screenshots/08-dashboard-light.png" alt="Dashboard over the full history, light theme" width="900" />
+<img src="docs/assets/screenshots/08-dashboard-light.png" alt="Dashboard default view, last 13 months, light theme" width="900" />
 
-Full history, dark theme:
+The same view in the dark theme:
 
-<img src="docs/assets/screenshots/09-dashboard-dark.png" alt="Dashboard over the full history, dark theme" width="900" />
+<img src="docs/assets/screenshots/09-dashboard-dark.png" alt="Dashboard default view, last 13 months, dark theme" width="900" />
 
 ## End-To-End Test On A Synthetic Sample
 
