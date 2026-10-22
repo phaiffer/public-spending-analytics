@@ -605,10 +605,10 @@ gov-spending bootstrap-duckdb
 
 This repository does not download Portal da Transparencia files automatically. Download one official spending CSV manually and keep the original file name.
 
-Recommended Windows folder pattern:
+Recommended folder pattern:
 
-```powershell
-New-Item -ItemType Directory -Force -Path data\raw\portal_transparencia\despesas\2025\01
+```bash
+mkdir -p data/raw/portal_transparencia/despesas/2025/01
 ```
 
 Place one downloaded file under that folder, for example:
@@ -619,19 +619,19 @@ data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 
 List discovered raw CSV files:
 
-```powershell
+```bash
 gov-spending list-raw-files
 ```
 
 Profile one selected file:
 
-```powershell
-gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending profile-raw-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 Or select by a filename substring when exactly one file matches:
 
-```powershell
+```bash
 gov-spending profile-raw-file --pattern Pagamento
 ```
 
@@ -677,16 +677,16 @@ Observed endpoint constraints:
 Configure an API key by registering at the Portal da Transparencia API page and
 setting the environment variable named in `config/project.toml`:
 
-```powershell
-$env:PORTAL_TRANSPARENCIA_API_KEY = "<your-api-key>"
+```bash
+export PORTAL_TRANSPARENCIA_API_KEY="<your-api-key>"
 ```
 
 Run a narrow extraction:
 
-```powershell
-gov-spending ingest-despesas-documentos `
-  --data-emissao 02/01/2025 `
-  --fase 3 `
+```bash
+gov-spending ingest-despesas-documentos \
+  --data-emissao 02/01/2025 \
+  --fase 3 \
   --unidade-gestora <VALUE>
 ```
 
@@ -719,22 +719,22 @@ The first staging command is limited to one Portal da Transparencia `Despesas` C
 
 Run profiling first:
 
-```powershell
-gov-spending profile-raw-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending profile-raw-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 Then stage that same file:
 
-```powershell
-gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv
+```bash
+gov-spending stage-despesas-file --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv
 ```
 
 If the profile artifact is stored somewhere else, pass it explicitly:
 
-```powershell
-gov-spending stage-despesas-file `
-  --file data\raw\portal_transparencia\despesas\2025\01\20250101_Despesas_Pagamento.csv `
-  --profile profiling\20250101_Despesas_Pagamento_profile.json
+```bash
+gov-spending stage-despesas-file \
+  --file data/raw/portal_transparencia/despesas/2025/01/20250101_Despesas_Pagamento.csv \
+  --profile profiling/20250101_Despesas_Pagamento_profile.json
 ```
 
 Default output pattern:

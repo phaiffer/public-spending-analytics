@@ -288,8 +288,8 @@ The `spending_stage` field is expected to come from the file context or source-s
 
 Command:
 
-```powershell
-gov-spending stage-despesas-file --file data\raw\portal_transparencia\despesas\YYYY\MM\<official Despesas file>.csv
+```bash
+gov-spending stage-despesas-file --file data/raw/portal_transparencia/despesas/YYYY/MM/<official Despesas file>.csv
 ```
 
 Default output:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -147,7 +147,7 @@ def build_profile(
 
     return {
         "profile_metadata": {
-            "profiled_at_utc": datetime.now(timezone.utc).isoformat(),
+            "profiled_at_utc": datetime.now(UTC).isoformat(),
             "source_file": str(file_path),
             "file_name": file_path.name,
             "file_size_bytes": file_path.stat().st_size,
