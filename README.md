@@ -518,21 +518,37 @@ limit 20;
 
 This foundation does not require real data to install.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+Supported Python versions: 3.11 to 3.13 (`.python-version` pins 3.12). Python
+3.14 is excluded because the dbt CLI (`dbt-duckdb`) failed to import on it.
+
+Recommended setup with [uv](https://docs.astral.sh/uv/), which installs the
+exact dependency versions recorded in `uv.lock`:
+
+```bash
+uv sync --extra dev
+source .venv/bin/activate
+```
+
+Without uv, a plain virtual environment also works, but resolves dependency
+versions at install time instead of using the lock file:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
-Check the CLI placeholder:
+On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1` instead.
 
-```powershell
+Check the CLI:
+
+```bash
 gov-spending --help
 ```
 
 Create a local DuckDB database placeholder:
 
-```powershell
+```bash
 gov-spending bootstrap-duckdb
 ```
 
