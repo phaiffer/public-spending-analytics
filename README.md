@@ -959,4 +959,9 @@ are included as supporting material.
 
 ## License
 
-No license has been selected yet. Add one before publishing or reusing this repository broadly.
+The code and documentation in this repository are released under the
+[MIT License](LICENSE), Copyright (c) 2026 PhaifferTech.
+
+The source data is not part of this repository. It is published by the
+Controladoria-Geral da Uniao through the Portal da Transparencia and remains
+subject to that portal's own terms of use.
