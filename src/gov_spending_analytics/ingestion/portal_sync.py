@@ -64,6 +64,7 @@ REQUEST_ATTEMPTS = 3
 DEFAULT_REQUEST_INTERVAL_SECONDS = 3.0
 USER_AGENT = "gov-spending-analytics (+https://github.com/phaiffer/public-spending-analytics)"
 
+VERSION_MANIFEST_NAME = "source_entry.toml"
 MANIFEST_HEADER = """\
 # Recebimentos source file versions registered by `gov-spending sync-recebimentos`.
 # Written by the sync job; one [[files]] entry per downloaded content version.
@@ -446,9 +447,17 @@ def register_and_stage(
         archive_size_bytes=fetched.size_bytes,
         is_open_month=month >= current_month(now),
     )
-    version_manifest = version_dir / "source_entry.toml"
+    version_manifest = version_dir / VERSION_MANIFEST_NAME
     append_source_file_entry(version_manifest, entry)
+    stage_version(csv_path, profile_path, version_manifest, staged_path)
+    append_source_file_entry(paths.manifest_path, entry, header=MANIFEST_HEADER)
+    return entry
 
+
+def stage_version(
+    csv_path: Path, profile_path: Path, version_manifest: Path, staged_path: Path
+) -> None:
+    """Stage one registered CSV version, replacing the month's Parquet atomically."""
     staged_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path = staged_path.with_name(staged_path.name + ".partial")
     stage_recebimentos_recursos_por_favorecido_csv(
@@ -458,8 +467,47 @@ def register_and_stage(
         manifest_path=version_manifest,
     )
     partial_path.replace(staged_path)
-    append_source_file_entry(paths.manifest_path, entry, header=MANIFEST_HEADER)
-    return entry
+
+
+def version_dir_for(entry: SourceFileEntry, download_root: Path) -> Path:
+    """Folder where sync stored the download of a registered version."""
+    retrieved = datetime.strptime(entry.retrieved_at or "", "%Y-%m-%dT%H:%M:%SZ")
+    month_folder = (entry.reference_month or "").replace("-", "")
+    return download_root / month_folder / retrieved.strftime("%Y%m%dT%H%M%SZ")
+
+
+def restage_from_archives(
+    paths: SyncPaths | None = None,
+    report: Callable[[MonthSyncResult], None] | None = None,
+) -> list[MonthSyncResult]:
+    """Restage the latest registered version of every month from the kept archives.
+
+    Used after a staging change; nothing is requested from the Portal. The CSV is
+    re-extracted and must still match the registered SHA-256.
+    """
+    paths = paths or SyncPaths()
+    results = []
+    for month, entry in sorted(latest_entries_by_month(paths.manifest_path).items()):
+        try:
+            version_dir = version_dir_for(entry, paths.download_root)
+            archive_path = version_dir / Path(entry.archive_url or "").name
+            csv_path = extract_expected_csv(archive_path, entry.file_name, version_dir)
+            try:
+                stage_version(
+                    csv_path=csv_path,
+                    profile_path=version_dir / f"{csv_path.stem}_profile.json",
+                    version_manifest=version_dir / VERSION_MANIFEST_NAME,
+                    staged_path=paths.staging_dir / f"{csv_path.stem}.parquet",
+                )
+            finally:
+                csv_path.unlink()
+            result = MonthSyncResult(month, "staged", f"{entry.row_count} rows from {version_dir}")
+        except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as exc:
+            result = MonthSyncResult(month, "failed", str(exc))
+        if report:
+            report(result)
+        results.append(result)
+    return results
 
 
 def count_by_status(results: list[MonthSyncResult]) -> dict[str, int]:

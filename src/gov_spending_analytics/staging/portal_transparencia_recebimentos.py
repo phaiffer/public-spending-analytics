@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from gov_spending_analytics.ingestion.source_manifest import (
     DEFAULT_MANIFEST_PATH,
@@ -23,6 +25,7 @@ from gov_spending_analytics.quality.basic_checks import (
 SOURCE_SYSTEM = "portal_transparencia"
 SOURCE_FAMILY = "recebimentos_recursos_por_favorecido"
 CHUNK_SIZE = 100_000
+AMOUNT_TYPE = pa.decimal128(18, 4)
 EXPECTED_COLUMNS = [
     "Código Favorecido",
     "Nome Favorecido",
@@ -155,7 +158,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
             f"{source_entry.row_count} rows for {file_path.name}"
         )
     validate_staged_data(staged)
-    staged.to_parquet(output_path, index=False)
+    write_staged_parquet(staged, output_path)
 
     return RecebimentosStagingResult(
         output_path=output_path,
@@ -166,6 +169,23 @@ def stage_recebimentos_recursos_por_favorecido_csv(
         source_family=SOURCE_FAMILY,
         column_mapping=SOURCE_TO_STAGED_COLUMNS,
     )
+
+
+def write_staged_parquet(staged: pd.DataFrame, output_path: Path) -> None:
+    """Write staged rows with a fixed amount type.
+
+    pyarrow would size the decimal to each file's largest value, and the monthly
+    files are read together through one glob, so every file is written as
+    DECIMAL(18, 4), the type the dbt staging model casts to.
+    """
+    table = pa.Table.from_pandas(staged, preserve_index=False)
+    index = table.schema.get_field_index("amount_received_brl")
+    table = table.set_column(
+        index,
+        pa.field("amount_received_brl", AMOUNT_TYPE),
+        table.column(index).cast(AMOUNT_TYPE),
+    )
+    pq.write_table(table, output_path)
 
 
 def load_profile(profile_path: Path) -> dict[str, Any]:

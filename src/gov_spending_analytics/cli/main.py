@@ -176,6 +176,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seconds to wait between months, to stay under the Portal's rate limits.",
     )
 
+    restage_parser = subparsers.add_parser(
+        "restage-recebimentos",
+        help=(
+            "Restage every synced month from the archives already downloaded, without "
+            "contacting the Portal (for example after a staging change)."
+        ),
+    )
+    restage_parser.add_argument(
+        "--dbt-build",
+        action="store_true",
+        help="Run dbt build after restaging.",
+    )
+
     despesas_documentos_parser = subparsers.add_parser(
         "ingest-despesas-documentos",
         help="[experimental] Ingest raw Portal da Transparencia despesas/documentos API pages.",
@@ -378,6 +391,10 @@ def main() -> None:
         run_sync_recebimentos(args, parser)
         return
 
+    if args.command == "restage-recebimentos":
+        run_restage_recebimentos(args, parser)
+        return
+
     if args.command == "ingest-despesas-documentos":
         try:
             from gov_spending_analytics.ingestion.portal_transparencia_api import (
@@ -452,6 +469,32 @@ def exclusive_lock(lock_path: Path, parser: argparse.ArgumentParser) -> Iterator
         yield
 
 
+def print_month_result(result) -> None:
+    print(f"{result.reference_month} {result.status:<14} {result.detail}", flush=True)
+
+
+def run_restage_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Restage synced months from local archives and optionally rebuild dbt."""
+    from gov_spending_analytics.ingestion.portal_sync import (
+        SyncPaths,
+        count_by_status,
+        restage_from_archives,
+    )
+    from gov_spending_analytics.utils.dbt_runner import run_dbt_build
+
+    paths = SyncPaths()
+    with exclusive_lock(paths.remote_state_path.with_name("sync.lock"), parser):
+        results = restage_from_archives(paths, report=print_month_result)
+    counts = count_by_status(results)
+    print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
+    if args.dbt_build and counts.get("staged"):
+        print("Running dbt build")
+        if run_dbt_build() != 0:
+            sys.exit("dbt build failed")
+    if counts.get("failed"):
+        sys.exit(f"{counts['failed']} month(s) failed to restage")
+
+
 def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Sync the monthly Recebimentos files and optionally rebuild the dbt project."""
     from gov_spending_analytics.ingestion.portal_sync import (
@@ -482,9 +525,7 @@ def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentPar
             keep_csv=args.keep_csv,
             dry_run=args.dry_run,
             request_interval=args.request_interval,
-            report=lambda result: print(
-                f"{result.reference_month} {result.status:<14} {result.detail}", flush=True
-            ),
+            report=print_month_result,
         )
     counts = count_by_status(results)
     print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))

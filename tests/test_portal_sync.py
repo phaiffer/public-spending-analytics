@@ -12,6 +12,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pytest
 
 from gov_spending_analytics.ingestion.portal_sync import (
@@ -19,6 +21,7 @@ from gov_spending_analytics.ingestion.portal_sync import (
     SyncPaths,
     load_remote_state,
     month_range,
+    restage_from_archives,
     select_months,
     shift_month,
     sync_recebimentos,
@@ -209,6 +212,25 @@ def test_dry_run_downloads_nothing(portal: tuple[Path, str], paths: SyncPaths) -
     assert result.status == "would_download"
     assert not paths.download_root.exists()
     assert not paths.remote_state_path.exists()
+
+
+def test_restage_rebuilds_months_from_kept_archives(
+    portal: tuple[Path, str], paths: SyncPaths
+) -> None:
+    portal_dir, template = portal
+    publish(portal_dir, SAMPLE_CSV.read_bytes(), mtime=1_760_000_000)
+    run_sync(paths, template, ["2026-01"])
+    staged_file = paths.staging_dir / "202601_RecebimentosRecursosPorFavorecido.parquet"
+    staged_file.unlink()
+    (portal_dir / "202601_Despesas.zip").unlink()  # the Portal is not contacted
+
+    [result] = restage_from_archives(paths)
+
+    assert result.status == "staged"
+    assert len(staged_rows(paths)) == SAMPLE_ROW_COUNT
+    amount_type = pq.read_schema(staged_file).field("amount_received_brl").type
+    assert amount_type == pa.decimal128(18, 4)
+    assert not list(paths.download_root.rglob("*.csv"))
 
 
 def test_current_month_is_registered_as_open(portal: tuple[Path, str], paths: SyncPaths) -> None:
