@@ -1,5 +1,7 @@
 # Brazilian Federal Public Spending Analytics
 
+[![CI](https://github.com/phaiffer/public-spending-analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/phaiffer/public-spending-analytics/actions/workflows/ci.yml)
+
 Standalone portfolio repository for building a local-first analytical foundation over Brazilian federal public spending data from official public sources.
 
 This repository is currently centered on one real implemented analytical case
@@ -948,6 +950,10 @@ mart row count, and collision result:
 ```bash
 pytest tests/test_recebimentos_e2e.py
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check`, the full pytest
+suite, and therefore this sample `dbt build`, on Python 3.11, 3.12, and 3.13
+with the dependency versions locked in `uv.lock`.
 
 ## Limitations And Future Work
 

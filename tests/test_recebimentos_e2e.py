@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -68,6 +69,8 @@ def test_dbt_build_over_sample(
 ) -> None:
     dbt = find_dbt_executable()
     if dbt is None:
+        if os.environ.get("CI"):
+            pytest.fail("dbt CLI is required in CI")
         pytest.skip("dbt CLI is not installed; install the dev extra to run this test")
 
     database_path = tmp_path / "sample.duckdb"
