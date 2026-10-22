@@ -650,7 +650,13 @@ The profiling command writes a JSON summary under `profiling/` by default. The o
 
 Profiling outputs may include sampled public records, so generated JSON files are ignored by git by default. Review them before deciding whether to publish a summarized version.
 
-## API Despesas Documentos Ingestion Workflow
+## Experimental: API Despesas Documentos Ingestion Workflow
+
+> **Experimental.** The `Despesas` paths (this API ingestion and the CSV
+> staging below) are not part of the implemented case study. They have not
+> been run end to end against a real downloaded file in this repository, no
+> enabled dbt model reads their output, and they are not covered by the CI
+> pipeline test. Treat their behavior as provisional.
 
 The project supports a narrow official API extraction path for raw Portal da
 Transparencia `despesas/documentos` responses. This is local-first raw
@@ -715,7 +721,18 @@ What remains provisional:
 - the first API path covers only `despesas/documentos`, not every Portal da Transparencia endpoint
 - valid `unidadeGestora` and `gestao` values must come from official/source context before live extraction
 
-## First Staging Workflow
+## Experimental: Despesas CSV Staging Workflow
+
+> **Experimental.** The `Despesas` paths (this API ingestion and the CSV
+> staging below) are not part of the implemented case study. They have not
+> been run end to end against a real downloaded file in this repository, no
+> enabled dbt model reads their output, and they are not covered by the CI
+> pipeline test. Treat their behavior as provisional.
+
+> Known risk: this path rejects negative `amount_brl` values. The implemented
+> recebimentos source contains real negative amounts (`1656` rows), so a real
+> `Despesas` file with reversals may fail staging. Revisit that rule with a real
+> profile before relying on this path.
 
 The first staging command is limited to one Portal da Transparencia `Despesas` CSV and its matching profile artifact. It validates that the raw CSV header still matches the profiled columns before writing Parquet.
 
@@ -776,7 +793,7 @@ Before writing Parquet, staging now runs lightweight checks tied to the observed
 and staged output:
 
 - required staged columns exist and are populated
-- `amount_brl` values are non-negative
+- `amount_brl` values are non-negative (provisional; see the known risk above)
 - source traceability fields exist and are populated
 - `source_row_number` remains positive
 

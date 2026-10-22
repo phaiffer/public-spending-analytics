@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from gov_spending_analytics.ingestion.portal_transparencia import discover_raw_csv_files
 from gov_spending_analytics.profiling.raw_csv import profile_raw_csv_file, select_raw_csv_file
 from gov_spending_analytics.utils.config import load_project_config
 from gov_spending_analytics.utils.duckdb_bootstrap import bootstrap_duckdb
+
+EXPERIMENTAL_COMMANDS = {"stage-despesas-file", "ingest-despesas-documentos"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     stage_parser = subparsers.add_parser(
         "stage-despesas-file",
-        help="Stage one profiled Portal da Transparencia despesas CSV as Parquet.",
+        help="[experimental] Stage one profiled Portal da Transparencia despesas CSV as Parquet.",
     )
     stage_parser.add_argument(
         "--file",
@@ -128,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     despesas_documentos_parser = subparsers.add_parser(
         "ingest-despesas-documentos",
-        help="Ingest raw Portal da Transparencia despesas/documentos API pages.",
+        help="[experimental] Ingest raw Portal da Transparencia despesas/documentos API pages.",
     )
     despesas_documentos_parser.add_argument(
         "--data-emissao",
@@ -188,6 +191,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    if args.command in EXPERIMENTAL_COMMANDS:
+        print(
+            f"Warning: {args.command} is experimental and not part of the implemented "
+            "case study; see the README.",
+            file=sys.stderr,
+        )
     config = load_project_config(Path(args.config))
 
     if args.command == "show-config":

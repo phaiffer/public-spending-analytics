@@ -1,4 +1,7 @@
-"""Raw API ingestion for Portal da Transparencia despesas documents."""
+"""Raw API ingestion for Portal da Transparencia despesas documents.
+
+Experimental: no dbt model reads these raw responses yet.
+"""
 
 from __future__ import annotations
 

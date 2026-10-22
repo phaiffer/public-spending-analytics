@@ -153,6 +153,11 @@ Known caveats:
 
 ### Current Profiling And Staging Status
 
+Status: experimental. The `Despesas` staging path and the API ingestion path
+have not been run against a real downloaded file in this repository, and the
+non-negative `amount_brl` staging check is provisional because the implemented
+recebimentos source contains real negative amounts.
+
 Real `Despesas` raw files and generated profile JSON files are local-only and ignored by git. The first staging implementation reads the local profile artifact and treats its `columns` list as the source of truth for observed columns.
 
 No real official CSV or profile artifact is committed to the repository. If a profile artifact exists only on a developer machine, summarize the observed columns below before committing source-specific documentation. Do not add a column to the staged canonical mapping unless it appears in the real profile artifact.
