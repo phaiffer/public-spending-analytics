@@ -1,0 +1,3 @@
+# Test fixtures are pinned by SHA-256 in tests/fixtures/source_manifest.toml,
+# so their bytes (latin-1, CRLF) must never be normalized by git.
+tests/fixtures/**/*.csv -text

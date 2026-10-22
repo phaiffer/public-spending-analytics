@@ -925,6 +925,30 @@ mart tables, and runs every data test. Two project vars control the input:
 
 Override them with `--vars` to build against another staged file.
 
+## End-To-End Test On A Synthetic Sample
+
+The real source file is not committed, so the full pipeline is also exercised
+on a 16-row synthetic sample:
+
+```text
+tests/fixtures/recebimentos_sample/202601_RecebimentosRecursosPorFavorecido.csv
+```
+
+It keeps the official format (latin-1, semicolon delimiter, quoted fields,
+CRLF line endings, `MM/YYYY` months, Brazilian decimals) and covers every
+beneficiary identifier kind, negative amounts, an `EX` / exterior beneficiary,
+and one masked-CPF name collision. Beneficiary names and identifiers are
+fictitious. It is pinned by its own manifest, `tests/fixtures/source_manifest.toml`,
+and regenerated with `tests/fixtures/make_recebimentos_sample.py`.
+
+`tests/test_recebimentos_e2e.py` profiles the sample, stages it, runs
+`dbt build` into a temporary DuckDB file, and checks the identifier kinds,
+mart row count, and collision result:
+
+```bash
+pytest tests/test_recebimentos_e2e.py
+```
+
 ## Limitations And Future Work
 
 Current limitations are explicit:
