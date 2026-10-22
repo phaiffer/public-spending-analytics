@@ -46,6 +46,7 @@ def test_build_staged_chunk_preserves_ids_and_exterior_location() -> None:
         file_path=Path("data/raw/202601_RecebimentosRecursosPorFavorecido.csv"),
         profile_path=Path("profiling/202601_RecebimentosRecursosPorFavorecido_profile.json"),
         source_file_sha256="0" * 64,
+        source_registered_row_count=1,
         first_row_number=1,
     )
 

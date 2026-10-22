@@ -43,6 +43,7 @@ TRACEABILITY_COLUMNS = (
     "source_file_name",
     "source_file_path",
     "source_file_sha256",
+    "source_registered_row_count",
     "source_profile_name",
     "source_row_number",
 )
@@ -137,6 +138,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
             file_path=file_path,
             profile_path=profile_path,
             source_file_sha256=source_entry.sha256,
+            source_registered_row_count=source_entry.row_count,
             first_row_number=next_row_number,
         )
         staged_chunks.append(staged_chunk)
@@ -249,9 +251,14 @@ def build_staged_chunk(
     file_path: Path,
     profile_path: Path,
     source_file_sha256: str,
+    source_registered_row_count: int,
     first_row_number: int,
 ) -> pd.DataFrame:
-    """Build one staged dataframe chunk from source columns."""
+    """Build one staged dataframe chunk from source columns.
+
+    source_registered_row_count is the manifest row count for the whole file, kept on
+    every row so dbt can check each staged month against its registered version.
+    """
     raw_chunk = raw_chunk.reset_index(drop=True)
     row_count = len(raw_chunk)
     staged = pd.DataFrame(
@@ -261,6 +268,7 @@ def build_staged_chunk(
             "source_file_name": file_path.name,
             "source_file_path": str(file_path),
             "source_file_sha256": source_file_sha256,
+            "source_registered_row_count": source_registered_row_count,
             "source_profile_name": profile_path.name,
             "source_row_number": range(first_row_number, first_row_number + row_count),
         }

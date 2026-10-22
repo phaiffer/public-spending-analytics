@@ -84,10 +84,7 @@ def test_dbt_build_over_sample(
         "      threads: 4\n",
         encoding="utf-8",
     )
-    dbt_vars = {
-        "recebimentos_staged_parquet": str(staged_sample.output_path),
-        "recebimentos_expected_row_count": SAMPLE_ROW_COUNT,
-    }
+    dbt_vars = {"recebimentos_staged_parquet": str(staged_sample.output_path)}
     completed = subprocess.run(
         [
             dbt,

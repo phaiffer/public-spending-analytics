@@ -15,11 +15,10 @@ clean-targets:
   - "dbt_packages"
 
 vars:
-  # Staged Parquet produced by `gov-spending stage-recebimentos-favorecido-file`.
-  # Override with --vars to build against another staged file (for example the CI sample).
-  recebimentos_staged_parquet: "../data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/202601_RecebimentosRecursosPorFavorecido.parquet"
-  # Must equal row_count of the matching entry in config/source_manifest.toml.
-  recebimentos_expected_row_count: 300350
+  # Staged Parquet files, one per month, written by `gov-spending sync-recebimentos` or
+  # `gov-spending stage-recebimentos-favorecido-file`. A glob reads every staged month.
+  # Override with --vars to build against another file or glob (for example the CI sample).
+  recebimentos_staged_parquet: "../data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/*.parquet"
 
 models:
   gov_spending_analytics:

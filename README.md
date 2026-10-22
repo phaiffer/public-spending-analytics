@@ -936,13 +936,18 @@ dbt build --profiles-dir .
 ```
 
 `dbt build` loads the seed, builds the staging and intermediate views and the
-mart tables, and runs every data test. Two project vars control the input:
+mart tables, and runs every data test. The project var
+`recebimentos_staged_parquet` controls the input. It defaults to a glob that
+reads every staged month under
+`data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`;
+override it with `--vars` to build against another file or glob.
 
-- `recebimentos_staged_parquet`: path to the staged Parquet, relative to `dbt/`
-- `recebimentos_expected_row_count`: expected staged rows; must equal the
-  `row_count` of the registered manifest entry
-
-Override them with `--vars` to build against another staged file.
+Each staged row carries `source_registered_row_count`, the row count registered
+for its file version in the source manifest. The
+`assert_recebimentos_source_row_count` test checks every staged file against
+it, so no month can lose or gain rows between the manifest and the mart. A
+warn-level test also flags any file whose launch months differ from the month
+in its file name.
 
 ## End-To-End Test On A Synthetic Sample
 
