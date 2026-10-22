@@ -747,9 +747,24 @@ Confirmed profile facts:
 - column count: `12`
 - no null-heavy columns detected in the profiled sample
 
+Download it from the official page, which redirects to a ZIP containing only
+this CSV:
+
+```text
+https://portaldatransparencia.gov.br/download-de-dados/despesas-favorecidos/202601
+```
+
+The exact file version is registered in `config/source_manifest.toml` by
+SHA-256, together with its size, row count, archive URL, and retrieval date.
+Staging hashes the raw file and refuses it unless the name and hash match a
+registered entry, and the expected row count comes from that entry. The Portal
+does republish past months (the January 2026 archive was republished on
+2026-10-10), so a new download may need to be registered before it can be
+staged.
+
 Run staging:
 
-```powershell
+```bash
 gov-spending stage-recebimentos-favorecido-file
 ```
 

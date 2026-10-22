@@ -116,6 +116,15 @@ def build_parser() -> argparse.ArgumentParser:
             "data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/."
         ),
     )
+    recebimentos_parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("config/source_manifest.toml"),
+        help=(
+            "Source manifest that registers the raw file version by SHA-256. "
+            "Defaults to config/source_manifest.toml."
+        ),
+    )
 
     despesas_documentos_parser = subparsers.add_parser(
         "ingest-despesas-documentos",
@@ -286,17 +295,23 @@ def main() -> None:
         if output_path is not None and not output_path.is_absolute():
             output_path = Path.cwd() / output_path
 
+        manifest_path = args.manifest
+        if not manifest_path.is_absolute():
+            manifest_path = Path.cwd() / manifest_path
+
         try:
             result = stage_recebimentos_recursos_por_favorecido_csv(
                 file_path=selected_file,
                 profile_path=profile_path,
                 output_path=output_path,
+                manifest_path=manifest_path,
             )
         except (OSError, ValueError, RuntimeError) as exc:
             parser.error(str(exc))
 
         print(f"Staged Parquet written to: {result.output_path}")
         print(f"Rows staged: {result.row_count}")
+        print(f"Source file SHA-256: {result.source_file_sha256}")
         print(f"Source family: {result.source_family}")
         print("Column mapping:")
         for source_column, staged_column in result.column_mapping.items():

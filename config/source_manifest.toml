@@ -1,0 +1,24 @@
+# Registered raw source files.
+#
+# Each [[files]] entry pins one exact version of an official raw file by SHA-256.
+# Staging refuses a raw file whose name and hash do not match an entry here, so a
+# silently republished Portal da Transparencia file cannot change the outputs
+# without a reviewed manifest change.
+#
+# To register a new version: download it into a fresh folder, record the hashes
+# (`sha256sum`), size, row count (data rows, header excluded) and retrieval date,
+# then add an entry below.
+
+[[files]]
+file_name = "202601_RecebimentosRecursosPorFavorecido.csv"
+source_family = "recebimentos_recursos_por_favorecido"
+reference_month = "2026-01"
+download_page_url = "https://portaldatransparencia.gov.br/download-de-dados/despesas-favorecidos/202601"
+archive_url = "https://dadosabertos-download.cgu.gov.br/PortalDaTransparencia/saida/despesas-favorecidos/202601_Despesas.zip"
+archive_sha256 = "32bec7cf2c266a648fa0efa6481bf8a7677c87a43559ab9af40193e648ebe3c1"
+archive_last_modified = "2026-10-10T04:36:51Z"
+retrieved_at = "2026-10-21"
+sha256 = "340d14e6b5cd9847845572f88a8e7f2e18dd317e597d548bdea8a9a8100fc39e"
+size_bytes = 67871628
+row_count = 300350
+column_count = 12
