@@ -40,6 +40,45 @@ models:
         tests:
           - not_null
 
+  - name: mart_recebimentos_monthly_summary
+    description: "Monthly rollup of received resources by superior government body and beneficiary identifier kind, sized for dashboards."
+    columns:
+      - name: launch_month_key
+        description: "Month key formatted as YYYYMM."
+        tests:
+          - not_null
+      - name: launch_month_start_date
+        description: "First day of the month."
+        tests:
+          - not_null
+      - name: superior_government_body_id
+        description: "Superior government body identifier from Código Órgão Superior."
+        tests:
+          - not_null
+      - name: superior_government_body_name
+        description: "Superior government body name as published for that month; names change across reorganizations."
+        tests:
+          - not_null
+      - name: beneficiary_identifier_kind
+        description: "Shape of beneficiary_id; see the staging model."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "other_code"]
+      - name: total_amount_received_brl
+        description: "Signed received amount summed over the group."
+        tests:
+          - not_null
+      - name: total_record_count
+        description: "Number of source rows in the group."
+        tests:
+          - not_null
+      - name: negative_amount_record_count
+        description: "Number of source rows with negative amounts in the group."
+        tests:
+          - not_null
+
   - name: fact_public_spending
     description: "Future core spending fact table by spending-stage event."
     columns:
