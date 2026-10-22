@@ -5,3 +5,9 @@ gov_spending_analytics:
       type: duckdb
       path: "../data/curated/gov_spending.duckdb"
       threads: 4
+      # The full history is over 100 million rows. Without a cap DuckDB may take
+      # most of the RAM, and systemd-oomd then kills the whole terminal or timer
+      # unit. Above the cap DuckDB spills to a temp folder next to the database.
+      settings:
+        memory_limit: "6GB"
+        preserve_insertion_order: false

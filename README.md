@@ -937,8 +937,13 @@ cd dbt
 dbt build --profiles-dir .
 ```
 
-`dbt build` loads the seed, builds the staging and intermediate views and the
-mart tables, and runs every data test. The project var
+`dbt build` loads the seed, builds the staging views and the intermediate and
+mart tables, and runs every data test.
+
+Over the full history (over 100 million rows) DuckDB needs a memory cap. The
+example profile sets `memory_limit: "6GB"`, and DuckDB spills to disk past it.
+A `profiles.yml` copied before that change has no cap: add the `settings`
+block from the example, or systemd-oomd may kill the whole terminal mid-build. The project var
 `recebimentos_staged_parquet` controls the input. It defaults to a glob that
 reads every staged month under
 `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`;
