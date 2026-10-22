@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from gov_spending_analytics.ingestion.source_manifest import (
     DEFAULT_MANIFEST_PATH,
@@ -23,6 +25,7 @@ from gov_spending_analytics.quality.basic_checks import (
 SOURCE_SYSTEM = "portal_transparencia"
 SOURCE_FAMILY = "recebimentos_recursos_por_favorecido"
 CHUNK_SIZE = 100_000
+AMOUNT_TYPE = pa.decimal128(18, 4)
 EXPECTED_COLUMNS = [
     "Código Favorecido",
     "Nome Favorecido",
@@ -43,6 +46,7 @@ TRACEABILITY_COLUMNS = (
     "source_file_name",
     "source_file_path",
     "source_file_sha256",
+    "source_registered_row_count",
     "source_profile_name",
     "source_row_number",
 )
@@ -137,6 +141,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
             file_path=file_path,
             profile_path=profile_path,
             source_file_sha256=source_entry.sha256,
+            source_registered_row_count=source_entry.row_count,
             first_row_number=next_row_number,
         )
         staged_chunks.append(staged_chunk)
@@ -153,7 +158,7 @@ def stage_recebimentos_recursos_por_favorecido_csv(
             f"{source_entry.row_count} rows for {file_path.name}"
         )
     validate_staged_data(staged)
-    staged.to_parquet(output_path, index=False)
+    write_staged_parquet(staged, output_path)
 
     return RecebimentosStagingResult(
         output_path=output_path,
@@ -164,6 +169,23 @@ def stage_recebimentos_recursos_por_favorecido_csv(
         source_family=SOURCE_FAMILY,
         column_mapping=SOURCE_TO_STAGED_COLUMNS,
     )
+
+
+def write_staged_parquet(staged: pd.DataFrame, output_path: Path) -> None:
+    """Write staged rows with a fixed amount type.
+
+    pyarrow would size the decimal to each file's largest value, and the monthly
+    files are read together through one glob, so every file is written as
+    DECIMAL(18, 4), the type the dbt staging model casts to.
+    """
+    table = pa.Table.from_pandas(staged, preserve_index=False)
+    index = table.schema.get_field_index("amount_received_brl")
+    table = table.set_column(
+        index,
+        pa.field("amount_received_brl", AMOUNT_TYPE),
+        table.column(index).cast(AMOUNT_TYPE),
+    )
+    pq.write_table(table, output_path)
 
 
 def load_profile(profile_path: Path) -> dict[str, Any]:
@@ -249,9 +271,14 @@ def build_staged_chunk(
     file_path: Path,
     profile_path: Path,
     source_file_sha256: str,
+    source_registered_row_count: int,
     first_row_number: int,
 ) -> pd.DataFrame:
-    """Build one staged dataframe chunk from source columns."""
+    """Build one staged dataframe chunk from source columns.
+
+    source_registered_row_count is the manifest row count for the whole file, kept on
+    every row so dbt can check each staged month against its registered version.
+    """
     raw_chunk = raw_chunk.reset_index(drop=True)
     row_count = len(raw_chunk)
     staged = pd.DataFrame(
@@ -261,6 +288,7 @@ def build_staged_chunk(
             "source_file_name": file_path.name,
             "source_file_path": str(file_path),
             "source_file_sha256": source_file_sha256,
+            "source_registered_row_count": source_registered_row_count,
             "source_profile_name": profile_path.name,
             "source_row_number": range(first_row_number, first_row_number + row_count),
         }

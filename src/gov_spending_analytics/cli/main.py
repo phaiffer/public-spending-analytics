@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
+import importlib.util
 import json
+import os
+import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from gov_spending_analytics.ingestion.portal_transparencia import discover_raw_csv_files
@@ -127,6 +133,74 @@ def build_parser() -> argparse.ArgumentParser:
             "Source manifest that registers the raw file version by SHA-256. "
             "Defaults to config/source_manifest.toml."
         ),
+    )
+
+    sync_parser = subparsers.add_parser(
+        "sync-recebimentos",
+        help=(
+            "Download new or republished monthly Recebimentos files from the Portal, "
+            "register each version, and stage it."
+        ),
+    )
+    sync_range = sync_parser.add_mutually_exclusive_group()
+    sync_range.add_argument(
+        "--all",
+        action="store_true",
+        help="Check every published month, from 2013-12 to the current month.",
+    )
+    sync_range.add_argument(
+        "--since",
+        help="First month to check, as YYYY-MM. Without --since or --all, sync checks "
+        "the current month and the 12 months before it.",
+    )
+    sync_parser.add_argument(
+        "--until",
+        help="Last month to check, as YYYY-MM. Defaults to the current month.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only ask the server what changed; download nothing.",
+    )
+    sync_parser.add_argument(
+        "--keep-csv",
+        action="store_true",
+        help="Keep the extracted CSV next to the downloaded archive after staging.",
+    )
+    sync_parser.add_argument(
+        "--dbt-build",
+        action="store_true",
+        help="Run dbt build when at least one month was staged.",
+    )
+    sync_parser.add_argument(
+        "--request-interval",
+        type=float,
+        default=3.0,
+        help="Seconds to wait between months, to stay under the Portal's rate limits.",
+    )
+
+    restage_parser = subparsers.add_parser(
+        "restage-recebimentos",
+        help=(
+            "Restage every synced month from the archives already downloaded, without "
+            "contacting the Portal (for example after a staging change)."
+        ),
+    )
+    restage_parser.add_argument(
+        "--dbt-build",
+        action="store_true",
+        help="Run dbt build after restaging.",
+    )
+
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Open the Streamlit dashboard over the DuckDB marts (needs the dashboard extra).",
+    )
+    dashboard_parser.add_argument(
+        "--port",
+        type=int,
+        default=8501,
+        help="Local port for the dashboard. Defaults to 8501.",
     )
 
     despesas_documentos_parser = subparsers.add_parser(
@@ -327,6 +401,18 @@ def main() -> None:
             print(f"- {source_column}: {staged_column}")
         return
 
+    if args.command == "sync-recebimentos":
+        run_sync_recebimentos(args, parser)
+        return
+
+    if args.command == "restage-recebimentos":
+        run_restage_recebimentos(args, parser)
+        return
+
+    if args.command == "dashboard":
+        run_dashboard(args, parser, Path(config["duckdb"]["database_path"]))
+        return
+
     if args.command == "ingest-despesas-documentos":
         try:
             from gov_spending_analytics.ingestion.portal_transparencia_api import (
@@ -387,6 +473,108 @@ def main() -> None:
         return
 
     parser.error(f"Unknown command: {args.command}")
+
+
+@contextmanager
+def exclusive_lock(lock_path: Path, parser: argparse.ArgumentParser) -> Iterator[None]:
+    """Hold an advisory lock so a manual run and the timer never sync at once."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            parser.exit(1, f"Another sync holds {lock_path}; try again when it finishes.\n")
+        yield
+
+
+def run_dashboard(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, database_path: Path
+) -> None:
+    """Start Streamlit on the dashboard app with the configured DuckDB file."""
+    if importlib.util.find_spec("streamlit") is None:
+        parser.error("Streamlit is not installed; run: uv sync --extra dashboard")
+    app_path = Path(__file__).resolve().parents[1] / "dashboard" / "app.py"
+    environment = {**os.environ, "GOV_SPENDING_DUCKDB": str(database_path.resolve())}
+    command = [
+        sys.executable, "-m", "streamlit", "run", str(app_path),
+        "--server.port", str(args.port),
+        # Local only by default; publishing the page is a deliberate deployment step.
+        "--server.address", "localhost",
+        # Without a terminal (background, systemd) skip the browser and first-run prompt.
+        "--server.headless", "false" if sys.stdin.isatty() else "true",
+    ]
+    sys.exit(subprocess.run(command, env=environment, check=False).returncode)
+
+
+def print_month_result(result) -> None:
+    print(f"{result.reference_month} {result.status:<14} {result.detail}", flush=True)
+
+
+def run_restage_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Restage synced months from local archives and optionally rebuild dbt."""
+    from gov_spending_analytics.ingestion.portal_sync import (
+        SyncPaths,
+        count_by_status,
+        restage_from_archives,
+    )
+    from gov_spending_analytics.utils.dbt_runner import run_dbt_build
+
+    paths = SyncPaths()
+    with exclusive_lock(paths.remote_state_path.with_name("sync.lock"), parser):
+        results = restage_from_archives(paths, report=print_month_result)
+    counts = count_by_status(results)
+    print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
+    if args.dbt_build and counts.get("staged"):
+        print("Running dbt build")
+        if run_dbt_build() != 0:
+            sys.exit("dbt build failed")
+    if counts.get("failed"):
+        sys.exit(f"{counts['failed']} month(s) failed to restage")
+
+
+def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Sync the monthly Recebimentos files and optionally rebuild the dbt project."""
+    from gov_spending_analytics.ingestion.portal_sync import (
+        SyncPaths,
+        count_by_status,
+        current_month,
+        select_months,
+        sync_recebimentos,
+    )
+    from gov_spending_analytics.utils.dbt_runner import run_dbt_build
+
+    paths = SyncPaths()
+    try:
+        months = select_months(
+            include_all=args.all,
+            since=args.since,
+            until=args.until,
+            today_month=current_month(),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    print(f"Checking {len(months)} months: {months[0]} to {months[-1]}")
+    with exclusive_lock(paths.remote_state_path.with_name("sync.lock"), parser):
+        results = sync_recebimentos(
+            months=months,
+            paths=paths,
+            keep_csv=args.keep_csv,
+            dry_run=args.dry_run,
+            request_interval=args.request_interval,
+            report=print_month_result,
+        )
+    counts = count_by_status(results)
+    print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
+
+    if args.dbt_build and counts.get("staged"):
+        print("Running dbt build")
+        if run_dbt_build() != 0:
+            sys.exit("dbt build failed")
+    if counts.get("blocked"):
+        sys.exit("The Portal is rate limiting this machine; the run stopped early")
+    if counts.get("failed"):
+        sys.exit(f"{counts['failed']} month(s) failed; they are retried on the next run")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ typed as (
         cast(source_file_name as varchar) as source_file_name,
         cast(source_file_path as varchar) as source_file_path,
         cast(source_file_sha256 as varchar) as source_file_sha256,
+        cast(source_registered_row_count as bigint) as source_registered_row_count,
         cast(source_profile_name as varchar) as source_profile_name,
         cast(source_row_number as bigint) as source_row_number,
 

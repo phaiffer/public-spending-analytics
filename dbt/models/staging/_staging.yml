@@ -5,7 +5,7 @@ sources:
     description: "Local Parquet files written by Python raw-to-staging jobs."
     tables:
       - name: recebimentos_recursos_por_favorecido
-        description: "Staged Recebimentos de Recursos por Favorecido Parquet file for 2026-01."
+        description: "Staged Recebimentos de Recursos por Favorecido Parquet files, one per registered monthly source file."
         config:
           external_location: "read_parquet('{{ var(\"recebimentos_staged_parquet\") }}')"
         columns:
@@ -38,7 +38,7 @@ models:
         description: "Spending amount in Brazilian reais."
 
   - name: stg_portal_transparencia__recebimentos_recursos_por_favorecido
-    description: "Source-aligned monthly received-resources records by beneficiary from the confirmed 2026-01 Portal da Transparencia file."
+    description: "Source-aligned monthly received-resources records by beneficiary from every staged Portal da Transparencia monthly file."
     columns:
       - name: source_system
         description: "Source system label assigned by the Python staging job."
@@ -59,7 +59,11 @@ models:
         tests:
           - not_null
       - name: source_row_number
-        description: "One-based row number from the raw CSV data rows. Unique within source_file_name, not necessarily across future files."
+        description: "One-based row number from the raw CSV data rows. Unique within source_file_name, not necessarily across files."
+        tests:
+          - not_null
+      - name: source_registered_row_count
+        description: "Data row count registered for this file version in the source manifest; assert_recebimentos_source_row_count checks it per file."
         tests:
           - not_null
       - name: beneficiary_id

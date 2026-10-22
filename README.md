@@ -576,9 +576,11 @@ Recommended setup with [uv](https://docs.astral.sh/uv/), which installs the
 exact dependency versions recorded in `uv.lock`:
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra dashboard
 source .venv/bin/activate
 ```
+
+The `dashboard` extra (Streamlit) is only needed for `gov-spending dashboard`.
 
 Without uv, a plain virtual environment also works, but resolves dependency
 versions at install time instead of using the lock file:
@@ -936,13 +938,116 @@ dbt build --profiles-dir .
 ```
 
 `dbt build` loads the seed, builds the staging and intermediate views and the
-mart tables, and runs every data test. Two project vars control the input:
+mart tables, and runs every data test. The project var
+`recebimentos_staged_parquet` controls the input. It defaults to a glob that
+reads every staged month under
+`data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`;
+override it with `--vars` to build against another file or glob.
 
-- `recebimentos_staged_parquet`: path to the staged Parquet, relative to `dbt/`
-- `recebimentos_expected_row_count`: expected staged rows; must equal the
-  `row_count` of the registered manifest entry
+Each staged row carries `source_registered_row_count`, the row count registered
+for its file version in the source manifest. The
+`assert_recebimentos_source_row_count` test checks every staged file against
+it, so no month can lose or gain rows between the manifest and the mart. A
+warn-level test also flags any file whose launch months differ from the month
+in its file name.
 
-Override them with `--vars` to build against another staged file.
+## Keeping The Data Current
+
+The Portal publishes one archive per month (`YYYYMM_Despesas.zip`, holding a
+single `YYYYMM_RecebimentosRecursosPorFavorecido.csv`) from 2013-12 onward. It
+updates the current month every day and republishes past months without notice
+(on 2026-10-22 the server reported that day's date for 2026-02 through 2026-10
+and also for older months such as 2016-12 and 2020-04). There is no delay after which a month is
+final, so the sync job detects changes instead of waiting a fixed period:
+
+```bash
+gov-spending sync-recebimentos --dry-run          # report what changed, download nothing
+gov-spending sync-recebimentos --dbt-build        # current month + the 12 before it
+gov-spending sync-recebimentos --all --dbt-build  # every month since 2013-12
+gov-spending sync-recebimentos --since 2024-01 --until 2024-12
+```
+
+For each month it:
+
+1. asks the server for `Last-Modified` and size (HEAD) and skips the month when
+   both match the last run and the month is already staged
+2. downloads the archive into a new folder,
+   `data/raw/portal_transparencia/recebimentos_recursos_por_favorecido/YYYYMM/<UTC timestamp>/`,
+   and refuses it unless it holds exactly the expected CSV within a size limit
+3. hashes the CSV; when the content is unchanged it keeps the staged month and
+   deletes the new folder
+4. otherwise profiles the CSV, stages it against a one-entry manifest next to the
+   download, and only then appends the version to
+   `data/sync/recebimentos_source_manifest.toml`
+5. replaces `data/staging/.../YYYYMM_RecebimentosRecursosPorFavorecido.parquet`
+   atomically and deletes the extracted CSV (`--keep-csv` keeps it); the archive
+   and profile stay as the record of that version
+
+Each month prints one status: `missing`, `unchanged`, `same_content`, `staged`,
+`would_download`, `failed` (retried next run), or `blocked`. A month registered
+while it was still the current month is flagged `is_open_month = true`.
+
+The reviewed `config/source_manifest.toml` stays the pinned reference for the
+documented January 2026 results; the sync manifest under `data/` is machine
+written and not committed. Republished versions are kept side by side, so a
+changed month can always be compared with the version it replaced.
+
+**Rate limits.** The download server sits behind an AWS WAF. The first
+full-history run (about 170 HEAD requests in a few minutes) was answered with
+HTTP 405 and `x-amzn-waf-action: captcha` for every request. Sync therefore
+waits `--request-interval` seconds between months (3 by default), checks only
+the recent window by default, treats a WAF challenge or HTTP 429 as `blocked`,
+and stops the run instead of retrying. It does not try to get around the
+challenge; wait a few hours and run again.
+
+**Restaging without downloading.** After a staging change, rebuild every synced
+month from the archives already on disk; the CSV must still match its registered
+SHA-256:
+
+```bash
+gov-spending restage-recebimentos --dbt-build
+```
+
+**Scheduling.** On Linux, install systemd user timers that run the recent-window
+sync daily at 06:00 and a full `--all` sweep on Sundays at 07:00, each followed
+by `dbt build`:
+
+```bash
+scripts/install_sync_timer.sh
+journalctl --user -u gov-spending-sync.service -u gov-spending-sync-full.service
+```
+
+The Portal regenerates its archives shortly after 00:00 UTC (about 21:00 in
+Brasilia), so morning runs pick up the previous evening's files. An advisory
+lock keeps a manual run and a scheduled run from syncing at the same time.
+
+A full history download is about 3 GB of archives; staging takes roughly a
+minute per month on a desktop machine, so `--all` from scratch runs for a few
+hours.
+
+## Dashboard
+
+```bash
+gov-spending dashboard            # http://localhost:8501
+```
+
+A Streamlit page over the dbt marts, in Brazilian Portuguese for the public
+audience:
+
+- period slider over the months loaded, superior government body filter, and
+  beneficiary identifier kind filter
+- total received, record count, negative records, and months with data
+- monthly totals on a time axis: months not loaded locally show as gaps, and a
+  month registered while still open is drawn lighter and labelled partial
+- rankings by superior government body and by identifier kind
+- the largest CNPJ and foreign beneficiaries in the period; masked CPFs are people
+  and are never ranked
+
+Charts read `mart_recebimentos_monthly_summary`, a rollup of month x superior
+body x identifier kind that stays small over the full history. Queries use
+short-lived read-only DuckDB connections, so the scheduled sync can rebuild the
+database while the page is open. The page binds to `localhost`; publishing it
+is a separate deployment decision. The light and dark themes follow the viewer.
 
 ## End-To-End Test On A Synthetic Sample
 
@@ -976,7 +1081,11 @@ with the dependency versions locked in `uv.lock`.
 
 Current limitations are explicit:
 
-- only one real `recebimentos` file is fully implemented through mart level
+- the documented results, screenshots, and Excel samples cover January 2026 only;
+  the pipeline now loads any number of months, but the case study has not been
+  rewritten over the full history
+- `sync-recebimentos --all` needs several polite runs to fetch the full history
+  when the Portal's WAF challenges the machine
 - the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
@@ -985,8 +1094,10 @@ Current limitations are explicit:
 
 Reasonable next steps, without changing the project character:
 
-- run the same path for additional months of the same source family
-- compare whether beneficiary-name collisions remain common across months
+- rewrite the case study over the full synced history
+- with four months loaded, 139 CNPJ and other-code IDs carry more than one name
+  across months (renamed companies) and none within a month; track whether that
+  holds over the full history
 - decide whether a separate beneficiary reference layer is justified by repeated evidence
 - extend the same conservative pattern to additional official source families
 

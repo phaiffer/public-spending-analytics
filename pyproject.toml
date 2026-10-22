@@ -26,6 +26,9 @@ dev = [
   "pytest>=8.0.0",
   "ruff>=0.6.0"
 ]
+dashboard = [
+    "streamlit>=1.40",
+]
 
 [project.scripts]
 gov-spending = "gov_spending_analytics.cli.main:main"
