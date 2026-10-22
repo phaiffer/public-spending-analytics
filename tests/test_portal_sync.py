@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from gov_spending_analytics.ingestion.portal_sync import (
+    MonthSyncResult,
     SyncPaths,
     load_remote_state,
     month_range,
@@ -39,16 +40,30 @@ class QuietHandler(SimpleHTTPRequestHandler):
         pass
 
 
+class WafChallengeHandler(QuietHandler):
+    """Answers like the Portal's CloudFront WAF once it flags a client."""
+
+    def do_HEAD(self) -> None:
+        self.send_response(405)
+        self.send_header("x-amzn-waf-action", "captcha")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    do_GET = do_HEAD
+
+
+def serve(directory: Path, handler: type[SimpleHTTPRequestHandler]) -> ThreadingHTTPServer:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(handler, directory=str(directory)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
 @pytest.fixture
 def portal(tmp_path: Path) -> Iterator[tuple[Path, str]]:
     """Serve tmp_path/portal over HTTP; yield the folder and the archive URL template."""
     portal_dir = tmp_path / "portal"
     portal_dir.mkdir()
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0), partial(QuietHandler, directory=str(portal_dir))
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    server = serve(portal_dir, QuietHandler)
     try:
         yield portal_dir, f"http://127.0.0.1:{server.server_port}/{{yyyymm}}_Despesas.zip"
     finally:
@@ -76,23 +91,33 @@ def publish(portal_dir: Path, csv_bytes: bytes, mtime: int, extra_member: bool =
     os.utime(archive_path, (mtime, mtime))
 
 
+def run_sync(
+    paths: SyncPaths, template: str, months: list[str], **options: object
+) -> dict[str, MonthSyncResult]:
+    options.setdefault("now", NOW)
+    results = sync_recebimentos(
+        months, paths, archive_url_template=template, request_interval=0, **options
+    )
+    return {result.reference_month: result for result in results}
+
+
+def statuses(results: dict[str, MonthSyncResult]) -> dict[str, str]:
+    return {month: result.status for month, result in results.items()}
+
+
 def staged_rows(paths: SyncPaths) -> pd.DataFrame:
     return pd.read_parquet(paths.staging_dir / "202601_RecebimentosRecursosPorFavorecido.parquet")
-
-
-def statuses(results: list) -> dict[str, str]:
-    return {result.reference_month: result.status for result in results}
 
 
 def test_month_helpers() -> None:
     assert month_range("2025-11", "2026-02") == ["2025-11", "2025-12", "2026-01", "2026-02"]
     assert shift_month("2026-01", -1) == "2025-12"
-    assert select_months(False, None, None, {}, "2026-10")[0] == "2025-10"
-    tracked = {"2026-08": {}, "2026-09": {}}
-    assert select_months(False, None, None, tracked, "2026-10") == ["2026-08", "2026-09", "2026-10"]
-    assert select_months(True, None, "2014-01", {}, "2026-10") == ["2013-12", "2014-01"]
+    default = select_months(False, None, None, "2026-10")
+    assert (default[0], default[-1], len(default)) == ("2025-10", "2026-10", 13)
+    assert select_months(False, "2026-08", None, "2026-10") == ["2026-08", "2026-09", "2026-10"]
+    assert select_months(True, None, "2014-01", "2026-10") == ["2013-12", "2014-01"]
     with pytest.raises(ValueError):
-        select_months(False, None, "2026-01", {}, "2026-10")
+        select_months(False, None, "2026-01", "2026-10")
 
 
 def test_sync_stages_a_new_month_then_skips_it_while_unchanged(
@@ -101,9 +126,7 @@ def test_sync_stages_a_new_month_then_skips_it_while_unchanged(
     portal_dir, template = portal
     publish(portal_dir, SAMPLE_CSV.read_bytes(), mtime=1_760_000_000)
 
-    first = sync_recebimentos(
-        ["2025-12", "2026-01"], paths, archive_url_template=template, now=NOW
-    )
+    first = run_sync(paths, template, ["2025-12", "2026-01"])
 
     assert statuses(first) == {"2025-12": "missing", "2026-01": "staged"}
     [entry] = load_source_manifest(paths.manifest_path)
@@ -117,9 +140,7 @@ def test_sync_stages_a_new_month_then_skips_it_while_unchanged(
     assert not list(paths.download_root.rglob("*.csv")), "CSV is removed after staging"
     assert list(paths.download_root.rglob("*_Despesas.zip")), "archive is kept"
 
-    second = sync_recebimentos(
-        ["2026-01"], paths, archive_url_template=template, now=NOW.replace(hour=13)
-    )
+    second = run_sync(paths, template, ["2026-01"], now=NOW.replace(hour=13))
     assert statuses(second) == {"2026-01": "unchanged"}
 
 
@@ -129,22 +150,18 @@ def test_sync_registers_a_republished_version(
     portal_dir, template = portal
     sample = SAMPLE_CSV.read_bytes()
     publish(portal_dir, sample, mtime=1_760_000_000)
-    sync_recebimentos(["2026-01"], paths, archive_url_template=template, now=NOW)
+    run_sync(paths, template, ["2026-01"])
 
     # Same CSV inside a regenerated archive: no new version.
     publish(portal_dir, sample, mtime=1_760_100_000)
-    rezipped = sync_recebimentos(
-        ["2026-01"], paths, archive_url_template=template, now=NOW.replace(hour=13)
-    )
+    rezipped = run_sync(paths, template, ["2026-01"], now=NOW.replace(hour=13))
     assert statuses(rezipped) == {"2026-01": "same_content"}
     assert len(load_source_manifest(paths.manifest_path)) == 1
 
     # The Portal drops the last row: a new version is registered and restaged.
     republished = sample[: sample.rstrip(b"\r\n").rfind(b"\r\n") + 2]
     publish(portal_dir, republished, mtime=1_760_200_000)
-    result = sync_recebimentos(
-        ["2026-01"], paths, archive_url_template=template, now=NOW.replace(hour=14)
-    )
+    result = run_sync(paths, template, ["2026-01"], now=NOW.replace(hour=14))
 
     assert statuses(result) == {"2026-01": "staged"}
     entries = load_source_manifest(paths.manifest_path)
@@ -158,7 +175,7 @@ def test_sync_refuses_an_archive_with_unexpected_members(
     portal_dir, template = portal
     publish(portal_dir, SAMPLE_CSV.read_bytes(), mtime=1_760_000_000, extra_member=True)
 
-    [result] = sync_recebimentos(["2026-01"], paths, archive_url_template=template, now=NOW)
+    result = run_sync(paths, template, ["2026-01"])["2026-01"]
 
     assert result.status == "failed"
     assert "should hold only" in result.detail
@@ -167,13 +184,27 @@ def test_sync_refuses_an_archive_with_unexpected_members(
     assert not (paths.staging_dir / "202601_RecebimentosRecursosPorFavorecido.parquet").exists()
 
 
+def test_sync_stops_when_the_server_challenges_the_client(
+    tmp_path: Path, paths: SyncPaths
+) -> None:
+    server = serve(tmp_path, WafChallengeHandler)
+    template = f"http://127.0.0.1:{server.server_port}/{{yyyymm}}_Despesas.zip"
+    try:
+        results = run_sync(paths, template, ["2025-12", "2026-01", "2026-02"])
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert statuses(results) == {"2025-12": "blocked"}, "no further month is requested"
+    assert "rate limiting" in results["2025-12"].detail
+    assert load_remote_state(paths.remote_state_path) == {}
+
+
 def test_dry_run_downloads_nothing(portal: tuple[Path, str], paths: SyncPaths) -> None:
     portal_dir, template = portal
     publish(portal_dir, SAMPLE_CSV.read_bytes(), mtime=1_760_000_000)
 
-    [result] = sync_recebimentos(
-        ["2026-01"], paths, archive_url_template=template, dry_run=True, now=NOW
-    )
+    result = run_sync(paths, template, ["2026-01"], dry_run=True)["2026-01"]
 
     assert result.status == "would_download"
     assert not paths.download_root.exists()
@@ -184,9 +215,7 @@ def test_current_month_is_registered_as_open(portal: tuple[Path, str], paths: Sy
     portal_dir, template = portal
     publish(portal_dir, SAMPLE_CSV.read_bytes(), mtime=1_760_000_000)
 
-    sync_recebimentos(
-        ["2026-01"], paths, archive_url_template=template, now=datetime(2026, 1, 20, tzinfo=UTC)
-    )
+    run_sync(paths, template, ["2026-01"], now=datetime(2026, 1, 20, tzinfo=UTC))
 
     [entry] = load_source_manifest(paths.manifest_path)
     assert entry.is_open_month is True

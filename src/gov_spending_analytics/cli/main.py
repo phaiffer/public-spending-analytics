@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from gov_spending_analytics.ingestion.portal_transparencia import discover_raw_csv_files
@@ -145,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_range.add_argument(
         "--since",
         help="First month to check, as YYYY-MM. Without --since or --all, sync checks "
-        "every month it already tracks plus newer ones (the last 12 months on a first run).",
+        "the current month and the 12 months before it.",
     )
     sync_parser.add_argument(
         "--until",
@@ -165,6 +168,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--dbt-build",
         action="store_true",
         help="Run dbt build when at least one month was staged.",
+    )
+    sync_parser.add_argument(
+        "--request-interval",
+        type=float,
+        default=3.0,
+        help="Seconds to wait between months, to stay under the Portal's rate limits.",
     )
 
     despesas_documentos_parser = subparsers.add_parser(
@@ -431,13 +440,24 @@ def main() -> None:
     parser.error(f"Unknown command: {args.command}")
 
 
+@contextmanager
+def exclusive_lock(lock_path: Path, parser: argparse.ArgumentParser) -> Iterator[None]:
+    """Hold an advisory lock so a manual run and the timer never sync at once."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("w") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            parser.exit(1, f"Another sync holds {lock_path}; try again when it finishes.\n")
+        yield
+
+
 def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Sync the monthly Recebimentos files and optionally rebuild the dbt project."""
     from gov_spending_analytics.ingestion.portal_sync import (
         SyncPaths,
         count_by_status,
         current_month,
-        load_remote_state,
         select_months,
         sync_recebimentos,
     )
@@ -449,22 +469,23 @@ def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentPar
             include_all=args.all,
             since=args.since,
             until=args.until,
-            remote_state=load_remote_state(paths.remote_state_path),
             today_month=current_month(),
         )
     except ValueError as exc:
         parser.error(str(exc))
 
     print(f"Checking {len(months)} months: {months[0]} to {months[-1]}")
-    results = sync_recebimentos(
-        months=months,
-        paths=paths,
-        keep_csv=args.keep_csv,
-        dry_run=args.dry_run,
-        report=lambda result: print(
-            f"{result.reference_month} {result.status:<14} {result.detail}", flush=True
-        ),
-    )
+    with exclusive_lock(paths.remote_state_path.with_name("sync.lock"), parser):
+        results = sync_recebimentos(
+            months=months,
+            paths=paths,
+            keep_csv=args.keep_csv,
+            dry_run=args.dry_run,
+            request_interval=args.request_interval,
+            report=lambda result: print(
+                f"{result.reference_month} {result.status:<14} {result.detail}", flush=True
+            ),
+        )
     counts = count_by_status(results)
     print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
 
@@ -472,6 +493,8 @@ def run_sync_recebimentos(args: argparse.Namespace, parser: argparse.ArgumentPar
         print("Running dbt build")
         if run_dbt_build() != 0:
             sys.exit("dbt build failed")
+    if counts.get("blocked"):
+        sys.exit("The Portal is rate limiting this machine; the run stopped early")
     if counts.get("failed"):
         sys.exit(f"{counts['failed']} month(s) failed; they are retried on the next run")
 

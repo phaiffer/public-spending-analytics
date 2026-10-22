@@ -59,6 +59,9 @@ MAX_EXTRACTED_BYTES = 2 * 1024**3
 DOWNLOAD_CHUNK_SIZE = 1 << 20
 REQUEST_TIMEOUT_SECONDS = 60
 REQUEST_ATTEMPTS = 3
+# Pause between months. The download server sits behind a WAF that challenges
+# clients sending many requests in a short window.
+DEFAULT_REQUEST_INTERVAL_SECONDS = 3.0
 USER_AGENT = "gov-spending-analytics (+https://github.com/phaiffer/public-spending-analytics)"
 
 MANIFEST_HEADER = """\
@@ -83,7 +86,8 @@ class MonthSyncResult:
 
     status is one of: missing (not published), unchanged (server metadata unchanged),
     same_content (archive changed but the CSV is identical), staged (new version
-    registered and staged), would_download (dry run), failed.
+    registered and staged), would_download (dry run), failed, blocked (the server
+    rate limited the run, which stops there).
     """
 
     reference_month: str
@@ -131,35 +135,25 @@ def current_month(now: datetime | None = None) -> str:
     return (now or datetime.now(UTC)).strftime("%Y-%m")
 
 
-def default_months_to_check(remote_state: dict[str, dict], today_month: str) -> list[str]:
-    """Months an incremental run checks: every tracked month plus any newer month.
-
-    With nothing tracked yet, the last DEFAULT_LOOKBACK_MONTHS months and the
-    current one are checked.
-    """
-    if not remote_state:
-        return month_range(shift_month(today_month, -DEFAULT_LOOKBACK_MONTHS), today_month)
-    tracked = sorted(remote_state)
-    if tracked[-1] >= today_month:
-        return tracked
-    return tracked + month_range(shift_month(tracked[-1], 1), today_month)
-
-
 def select_months(
     include_all: bool,
     since: str | None,
     until: str | None,
-    remote_state: dict[str, dict],
     today_month: str,
 ) -> list[str]:
-    """Resolve the months one run checks from the CLI options."""
+    """Resolve the months one run checks from the CLI options.
+
+    The default is the current month and the DEFAULT_LOOKBACK_MONTHS before it,
+    where the Portal makes most of its changes. Older republications are picked up
+    by an occasional --all run.
+    """
     if include_all:
         return month_range(FIRST_PUBLISHED_MONTH, until or today_month)
     if since:
         return month_range(since, until or today_month)
     if until:
         raise ValueError("--until needs --since or --all")
-    return default_months_to_check(remote_state, today_month)
+    return month_range(shift_month(today_month, -DEFAULT_LOOKBACK_MONTHS), today_month)
 
 
 def archive_url(month: str, template: str = ARCHIVE_URL_TEMPLATE) -> str:
@@ -179,12 +173,31 @@ def http_date_to_iso(value: str | None) -> str:
     return parsedate_to_datetime(value).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+class PortalBlockedError(RuntimeError):
+    """The download server answered with a bot challenge or a rate limit."""
+
+
+def is_blocked_response(exc: HTTPError) -> bool:
+    """True for a rate limit or an AWS WAF challenge (served as 405 with a WAF header)."""
+    return exc.code == 429 or bool(exc.headers and exc.headers.get("x-amzn-waf-action"))
+
+
 def open_with_retries(request: Request, timeout: int = REQUEST_TIMEOUT_SECONDS):
-    """Open a request, retrying transient network and server errors."""
+    """Open a request, retrying transient network and server errors.
+
+    A rate limit or bot challenge is never retried: it raises PortalBlockedError so
+    the run stops instead of adding load to a server that is pushing back.
+    """
     for attempt in range(1, REQUEST_ATTEMPTS + 1):
         try:
             return urlopen(request, timeout=timeout)
         except HTTPError as exc:
+            if is_blocked_response(exc):
+                raise PortalBlockedError(
+                    f"The Portal download server is rate limiting this machine "
+                    f"(HTTP {exc.code}, WAF action {exc.headers.get('x-amzn-waf-action')!r}). "
+                    "Stopped; wait a few hours before the next run."
+                ) from exc
             if exc.code < 500 or attempt == REQUEST_ATTEMPTS:
                 raise
         except URLError:
@@ -207,7 +220,8 @@ def head_archive(month: str, template: str = ARCHIVE_URL_TEMPLATE) -> RemoteArch
                 size_bytes=int(response.headers.get("Content-Length") or 0),
             )
     except HTTPError as exc:
-        # The download server answers 403 or 404 for months it does not publish.
+        # The download server answers 403 or 404 for months it does not publish;
+        # rate limits and WAF challenges were already raised as PortalBlockedError.
         if exc.code in (403, 404):
             return None
         raise
@@ -295,11 +309,14 @@ def sync_recebimentos(
     dry_run: bool = False,
     now: datetime | None = None,
     report: Callable[[MonthSyncResult], None] | None = None,
+    request_interval: float = DEFAULT_REQUEST_INTERVAL_SECONDS,
 ) -> list[MonthSyncResult]:
     """Check each month on the Portal and stage every new content version.
 
-    A failure in one month is reported and the run moves on to the next month; the
-    failed month is retried on the next run because its server state is not saved.
+    Months are checked one at a time, request_interval seconds apart. A failure in
+    one month is reported and the run moves on; the failed month is retried on the
+    next run because its server state is not saved. A rate limit or bot challenge
+    stops the whole run.
     """
     paths = paths or SyncPaths()
     now = now or datetime.now(UTC)
@@ -307,7 +324,9 @@ def sync_recebimentos(
     latest = latest_entries_by_month(paths.manifest_path)
 
     results = []
-    for month in months:
+    for index, month in enumerate(months):
+        if index and request_interval > 0:
+            time.sleep(request_interval)
         try:
             result = sync_month(
                 month=month,
@@ -319,6 +338,8 @@ def sync_recebimentos(
                 dry_run=dry_run,
                 now=now,
             )
+        except PortalBlockedError as exc:
+            result = MonthSyncResult(month, "blocked", str(exc))
         except (OSError, ValueError, RuntimeError, zipfile.BadZipFile) as exc:
             result = MonthSyncResult(month, "failed", str(exc))
         if not dry_run:
@@ -326,6 +347,8 @@ def sync_recebimentos(
         if report:
             report(result)
         results.append(result)
+        if result.status == "blocked":
+            break
     return results
 
 
