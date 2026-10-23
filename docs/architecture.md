@@ -209,6 +209,7 @@ Identifier kinds and Treasury codes:
 - `beneficiary_identifier_kind` is set in staging from the shape of `beneficiary_id`; `RB` codes are looked up in the reviewed seed `treasury_bank_codes` and become `treasury_operation` (cash management inside the government) or `treasury_payment` (aggregated payments such as INSS benefits and payroll); `TN` codes become `intergovernmental_transfer`
 - An `RB` code missing from the seed is staged as `treasury_unclassified`, and `assert_treasury_bank_codes_are_classified` warns with its code and name
 - Six-digit codes listed in the reviewed seed `treasury_management_units` (the CGTES cash coordination, public debt control and other Secretaria do Tesouro Nacional units) become `treasury_management_unit`
+- Other six-digit codes become `management_unit`; `PF` and `PS` codes become `pf_code`; 10 to 12 digit codes published as SEM INFORMACAO or CODIGO INEXISTENTE NO SIAFI become `unregistered_code`; anything else stays `other_code`, and the warn test `assert_beneficiary_ids_have_a_known_shape` lists it
 - The dashboard leaves `treasury_operation` and `treasury_management_unit` out of its totals by default
 
 ## Intended Flow
