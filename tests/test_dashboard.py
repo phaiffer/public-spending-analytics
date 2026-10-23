@@ -28,6 +28,7 @@ SUMMARY_ROWS = [
     (202601, "26000", "Ministério da Educação e Cultura", "placeholder", 300.0, 1, 0),
     (202602, "36000", "Ministério da Saúde", "foreign_code", 50.0, 1, 0),
     (202601, "25000", "Ministério da Fazenda", "treasury_operation", -9000.0, 1, 1),
+    (202601, "25000", "Ministério da Fazenda", "treasury_management_unit", 700.0, 1, 0),
 ]
 # (month, id, kind, name, amount)
 BENEFICIARY_ROWS = [
@@ -106,14 +107,14 @@ def test_period_and_kind_filters(con: duckdb.DuckDBPyConnection) -> None:
     assert monthly["total_amount_brl"].tolist() == [1400.0, 2500.0, 50.0]
 
 
-def test_treasury_operations_are_left_out_by_default(con: duckdb.DuckDBPyConnection) -> None:
+def test_internal_treasury_flows_are_left_out_by_default(con: duckdb.DuckDBPyConnection) -> None:
     by_default = queries.headline_totals(con, queries.DashboardFilters(202601, 202601))
     assert by_default["total_amount_brl"] == 2800.0
 
     every_kind = queries.DashboardFilters(
         202601, 202601, identifier_kinds=queries.IDENTIFIER_KINDS
     )
-    assert queries.headline_totals(con, every_kind)["total_amount_brl"] == -6200.0
+    assert queries.headline_totals(con, every_kind)["total_amount_brl"] == -5500.0
 
 
 def test_body_filter_and_latest_body_name(con: duckdb.DuckDBPyConnection) -> None:
