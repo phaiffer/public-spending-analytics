@@ -17,12 +17,12 @@ models:
         tests:
           - not_null
       - name: beneficiary_identifier_kind
-        description: "Shape of beneficiary_id: cnpj (14 digits), cpf_masked (***.NNN.NNN-**), foreign_code (EX-prefixed, exterior beneficiaries), placeholder (negative codes such as -1 SEM INFORMACAO or -11 Sigiloso), treasury_operation or treasury_payment (RB Treasury bank codes, classified in the treasury_bank_codes seed; treasury_unclassified until reviewed), intergovernmental_transfer (TN codes: transfers to states and municipalities), treasury_management_unit (Treasury management units listed in the treasury_management_units seed), or other_code."
+        description: "Shape of beneficiary_id: cnpj (14 digits), cpf_masked (***.NNN.NNN-**), foreign_code (EX-prefixed, exterior beneficiaries), placeholder (negative codes such as -1 SEM INFORMACAO or -11 Sigiloso), treasury_operation or treasury_payment (RB Treasury bank codes, classified in the treasury_bank_codes seed; treasury_unclassified until reviewed), intergovernmental_transfer (TN codes: transfers to states and municipalities), treasury_management_unit (Treasury management units listed in the treasury_management_units seed), management_unit (other 6-digit SIAFI management unit codes), pf_code (PF + 7 characters: people without a CPF and aggregate grants), unregistered_code (10 to 12 digits published as SEM INFORMACAO or CODIGO INEXISTENTE NO SIAFI), or other_code (any other shape, flagged by assert_beneficiary_ids_have_a_known_shape)."
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "treasury_operation", "treasury_payment", "treasury_unclassified", "intergovernmental_transfer", "treasury_management_unit", "other_code"]
+                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "treasury_operation", "treasury_payment", "treasury_unclassified", "intergovernmental_transfer", "treasury_management_unit", "management_unit", "pf_code", "unregistered_code", "other_code"]
       - name: beneficiary_name
         description: "Beneficiary name kept in the mart grain because masked CPF values (cpf_masked) are shared by different people, so beneficiary_id alone is not unique enough."
         tests:
@@ -69,7 +69,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "treasury_operation", "treasury_payment", "treasury_unclassified", "intergovernmental_transfer", "treasury_management_unit", "other_code"]
+                values: ["cnpj", "cpf_masked", "foreign_code", "placeholder", "treasury_operation", "treasury_payment", "treasury_unclassified", "intergovernmental_transfer", "treasury_management_unit", "management_unit", "pf_code", "unregistered_code", "other_code"]
       - name: total_amount_received_brl
         description: "Signed received amount summed over the group."
         tests:

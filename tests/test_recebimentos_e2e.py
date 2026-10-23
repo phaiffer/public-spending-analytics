@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 SAMPLE_CSV = FIXTURES / "recebimentos_sample" / "202601_RecebimentosRecursosPorFavorecido.csv"
 SAMPLE_MANIFEST = FIXTURES / "source_manifest.toml"
-SAMPLE_ROW_COUNT = 17
+SAMPLE_ROW_COUNT = 19
 
 
 @pytest.fixture(scope="module")
@@ -140,9 +140,11 @@ def test_dbt_build_over_sample(
         "placeholder": 3,
         "treasury_operation": 1,
         "treasury_management_unit": 1,
-        "other_code": 1,
+        "management_unit": 1,
+        "pf_code": 1,
+        "unregistered_code": 1,
     }
-    assert mart_rows == 15
+    assert mart_rows == 17
     assert multi_name_ids == [("***.111.222-**", "cpf_masked")]
 
 
