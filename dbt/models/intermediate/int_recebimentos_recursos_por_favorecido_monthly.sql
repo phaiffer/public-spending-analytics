@@ -1,7 +1,22 @@
+{{
+    config(
+        materialized='incremental',
+        incremental_strategy='delete+insert',
+        unique_key='launch_month_key',
+        on_schema_change='fail'
+    )
+}}
+
 with staged as (
 
     select *
     from {{ ref('stg_portal_transparencia__recebimentos_recursos_por_favorecido') }}
+    {% if is_incremental() %}
+    -- Only the months whose staged file or classification changed since the last build.
+    where launch_month_key in (
+        {{ recebimentos_changed_staged_months(ref('stg_portal_transparencia__recebimentos_recursos_por_favorecido')) }}
+    )
+    {% endif %}
 
 ),
 
@@ -31,7 +46,8 @@ monthly as (
         min(source_file_name) as first_source_file_name,
         max(source_file_name) as last_source_file_name,
         min(source_row_number) as first_source_row_number,
-        max(source_row_number) as last_source_row_number
+        max(source_row_number) as last_source_row_number,
+        max(source_file_sha256) as source_file_sha256
     from staged
     group by
         launch_month_key,
@@ -52,5 +68,8 @@ monthly as (
 
 )
 
-select *
+select
+    monthly.*,
+    {{ recebimentos_classification_fingerprint() }} as classification_fingerprint,
+    current_timestamp as built_at
 from monthly

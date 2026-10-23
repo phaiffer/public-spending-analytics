@@ -39,6 +39,10 @@ models:
         description: "Number of aggregated rows with signed negative amounts."
         tests:
           - not_null
+      - name: built_at
+        description: "When dbt built the launch month; incremental builds rebuild the months the intermediate model rebuilt after it."
+        tests:
+          - not_null
 
   - name: mart_recebimentos_monthly_summary
     description: "Monthly rollup of received resources by superior government body and beneficiary identifier kind, sized for dashboards."
@@ -76,6 +80,10 @@ models:
           - not_null
       - name: negative_amount_record_count
         description: "Number of source rows with negative amounts in the group."
+        tests:
+          - not_null
+      - name: built_at
+        description: "When dbt built the launch month; incremental builds rebuild the months the intermediate model rebuilt after it."
         tests:
           - not_null
 
