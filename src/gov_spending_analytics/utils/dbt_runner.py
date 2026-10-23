@@ -16,13 +16,17 @@ def find_dbt_executable() -> str | None:
     return shutil.which("dbt", path=str(Path(sys.executable).parent)) or shutil.which("dbt")
 
 
-def run_dbt_build(project_dir: Path = DEFAULT_DBT_PROJECT_DIR) -> int:
-    """Run `dbt build` with the project's local profiles.yml and return its exit code."""
+def run_dbt_build(project_dir: Path = DEFAULT_DBT_PROJECT_DIR, full_refresh: bool = False) -> int:
+    """Run `dbt build` with the project's local profiles.yml and return its exit code.
+
+    Incremental models rebuild only the months whose staged file changed;
+    full_refresh rebuilds every month, as needed after restaging.
+    """
     dbt = find_dbt_executable()
     if dbt is None:
         raise RuntimeError("dbt CLI not found; install the dev extra: uv sync --extra dev")
     completed = subprocess.run(
-        [dbt, "build", "--profiles-dir", "."],
+        [dbt, "build", "--profiles-dir", ".", *(["--full-refresh"] if full_refresh else [])],
         cwd=project_dir,
         check=False,
     )
