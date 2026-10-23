@@ -1054,8 +1054,21 @@ cd dbt
 dbt build --profiles-dir .
 ```
 
-`dbt build` loads the seed, builds the staging views and the intermediate and
+`dbt build` loads the seeds, builds the staging views and the intermediate and
 mart tables, and runs every data test.
+
+The Recebimentos intermediate model and both marts are incremental by launch
+month (`delete+insert` on `launch_month_key`), so a build rebuilds whole months
+and never mixes two versions of one month:
+
+- the intermediate model rebuilds a month when the SHA-256 of its staged file
+  changed, and every month when the classification seeds changed (it keeps an
+  MD5 fingerprint of `treasury_bank_codes` and `treasury_management_units`)
+- the marts rebuild the months the intermediate model rebuilt after them
+  (`built_at`)
+- a change to the model SQL itself, or a restage after a staging code change,
+  needs `dbt build --full-refresh`; `gov-spending restage-recebimentos
+  --dbt-build` passes it
 
 Over the full history (over 100 million rows) DuckDB needs a memory cap. The
 example profile sets `memory_limit: "6GB"`, and DuckDB spills to disk past it.
@@ -1228,8 +1241,9 @@ Current limitations are explicit:
   the case study numbers and the dashboard screenshots cover the full history
 - `sync-recebimentos --all` stops when the Portal's WAF challenges the machine,
   so a first full sync may need more than one run
-- a full `dbt build` takes two to three hours and spills to disk under the 6 GB
-  DuckDB cap; it is a batch job, not an interactive one
+- a full `dbt build --full-refresh` takes two to three hours and spills to disk
+  under the 6 GB DuckDB cap; daily builds are incremental, but the data tests
+  still scan the full history
 - the `RB` classification is read from the published code names and reviewed
   by hand; new codes need the same review when the dbt test warns
 - the Treasury management units are a reviewed list of `8` STN units; leaving
@@ -1249,8 +1263,6 @@ Reasonable next steps, without changing the project character:
 - over the full history, `4463` CNPJ, foreign, and other-code IDs change name
   across months and none within a month; a name history per CNPJ could
   support a reference layer
-- build the dbt intermediate and marts incrementally per month, so the daily
-  sync does not rebuild twelve years of history
 - decide whether a separate beneficiary reference layer is justified by repeated evidence
 - extend the same conservative pattern to additional official source families
 

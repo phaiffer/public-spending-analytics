@@ -180,7 +180,7 @@ Confirmed first real dbt model:
 Confirmed first intermediate analytical model:
 
 - Model: `int_recebimentos_recursos_por_favorecido_monthly`
-- Materialization: a table, so the marts and data tests downstream read the aggregated full history once instead of re-aggregating `120` million staged rows each time; the dbt profile caps DuckDB at 6 GB and lets it spill to disk
+- Materialization: incremental by launch month (`delete+insert` on `launch_month_key`), so the marts and data tests read the aggregated history instead of re-aggregating `120` million staged rows, and a daily build re-aggregates only the months whose staged file SHA-256 or classification seeds changed; the marts follow the months the intermediate rebuilt (`built_at`); the dbt profile caps DuckDB at 6 GB and lets it spill to disk
 - Grain: one row per month, beneficiary, government body, management unit, beneficiary location code, and beneficiary municipality name
 - Inputs: the real dbt staging model for `Recebimentos de Recursos por Favorecido`
 - Measures: `total_amount_received_brl`, `record_count`, and `negative_amount_record_count`
