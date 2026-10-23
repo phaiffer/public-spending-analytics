@@ -46,7 +46,10 @@ KIND_LABELS = {
     "treasury_payment": "Pagamentos agregados do Tesouro (benefícios, folha)",
     "intergovernmental_transfer": "Transferências a estados e municípios",
     "treasury_unclassified": "Código do Tesouro não classificado",
-    "other_code": "Outros códigos (ex.: unidades gestoras)",
+    "management_unit": "Unidades gestoras (órgãos e entidades no SIAFI)",
+    "pf_code": "Códigos PF (pessoas sem CPF, bolsas e auxílios)",
+    "unregistered_code": "Código sem cadastro no SIAFI",
+    "other_code": "Outros códigos",
     "treasury_operation": "Operações de caixa do Tesouro (dívida, títulos)",
     "treasury_management_unit": "Unidades gestoras do Tesouro (repasses internos)",
 }
@@ -323,6 +326,13 @@ def render_notes() -> None:
   (CGTES), ao controle da dívida pública e a outras unidades da Secretaria do Tesouro
   Nacional. É dinheiro que entra no próprio Tesouro, pago quase todo por outras
   unidades do governo, por isso também fica fora do total até ser selecionado.
+- **Outras unidades gestoras:** universidades, comandos militares, agências e outros
+  órgãos que recebem recursos pelo código de unidade gestora do SIAFI. Boa parte são
+  repasses dentro do governo federal; continuam no total, mas podem ser desmarcadas.
+- **Códigos PF e códigos sem cadastro:** códigos PF identificam pessoas físicas
+  publicadas sem CPF e pagamentos agregados de bolsas e auxílios; por incluírem
+  pessoas, não aparecem no ranking. Códigos numéricos publicados como SEM INFORMACAO
+  ou CODIGO INEXISTENTE NO SIAFI somam valores pequenos.
 - **Código e metodologia:** [{REPOSITORY_URL.removeprefix("https://")}]({REPOSITORY_URL}).
 """
         )

@@ -25,29 +25,30 @@ What is real in the current pipeline:
 - every monthly archive the Portal publishes, `2013-12` through `2026-10`
   (`155` months), synced, checked against its CSV row count, and staged to
   one Parquet file per month
-- one dbt staging view, one intermediate table, and two mart tables over the
-  full history
-- `dbt build` runs end to end through the dbt CLI: `75` nodes (models, seeds,
-  and data tests), all passing, in two to three hours on a desktop with DuckDB
-  capped at 6 GB
+- one dbt staging view, one intermediate model, and two mart models over the
+  full history, built incrementally by month
+- `dbt build` runs end to end through the dbt CLI: `85` nodes (models, seeds,
+  and data tests), all passing; on a desktop with DuckDB capped at 6 GB a full
+  refresh takes about three and a half hours and a build with no changed
+  month about 15 minutes
 - a local Streamlit dashboard over the marts (see [Dashboard](#dashboard))
 
-Full-history facts (data synced on 2026-10-22; `2026-10` is still open):
+Full-history facts (data synced on 2026-10-23; `2026-10` is still open):
 
 | Fact | Value |
 | --- | ---: |
-| Source rows staged | `120078492` |
-| Mart rows at beneficiary-month grain | `103565566` |
-| Rows with a negative signed amount | `1935520` |
-| Distinct beneficiary IDs | `1674810` |
-| Masked CPFs with more than one name in the same month | `872795` |
+| Source rows staged | `120093295` |
+| Mart rows at beneficiary-month grain | `103576729` |
+| Rows with a negative signed amount | `1935627` |
+| Distinct beneficiary IDs | `1674906` |
+| Masked CPFs with more than one name in the same month | `872852` |
 | Net signed total, internal Treasury flows left out | R$ 27.64 trillion |
-| Net signed total, every identifier kind | R$ 14.47 trillion |
+| Net signed total, every identifier kind | R$ 14.46 trillion |
 
 The two totals differ because the Portal also publishes money that stays inside
 the Treasury. Treasury cash management (public debt service, bond issuance,
 Treasury and INSS transfers) appears under `RB` codes and nets
-R$ -18.39 trillion; payments to the Treasury's own management units, such as
+R$ -18.40 trillion; payments to the Treasury's own management units, such as
 the CGTES cash coordination, net R$ 5.22 trillion. The pipeline classifies both
 and leaves them out of the default totals (see [Treasury Codes](#treasury-codes)).
 
@@ -307,11 +308,11 @@ Finished running 1 seed, 2 table models, 43 data tests, 2 view models
 Done. PASS=48 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=48
 ```
 
-`dbt build` result over the full history, `155` months (2026-10-23):
+`dbt build --full-refresh` result over the full history, `155` months (2026-10-23):
 
 ```text
-Finished running 2 seeds, 4 table models, 68 data tests, 1 view model in 2 hours 32 minutes and 55.10 seconds (9175.10s).
-Done. PASS=75 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=75
+Finished running 3 incremental models, 3 seeds, 1 table model, 77 data tests, 1 view model in 3 hours 28 minutes and 1.86 seconds (12481.86s).
+Done. PASS=85 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=85
 ```
 
 ## Intended Analytical Model
@@ -413,11 +414,11 @@ Geography remains flexible:
 - values such as `EX` are treated as valid source evidence, not data quality failures
 
 Negative amounts are preserved:
-- the full history contains `1935520` negative signed amount rows
+- the full history contains `1935627` negative signed amount rows
 - forcing a non-negative rule here would destroy observed source behavior
 
 `beneficiary_name` remains in the mart grain:
-- over the full history, `872795` beneficiary IDs map to more than one beneficiary name within a month
+- over the full history, `872852` beneficiary IDs map to more than one beneficiary name within a month
 - every one of them is a masked CPF, which the Portal publishes with only six digits visible
 - collapsing the mart to month + `beneficiary_id` would merge different people into one row
 
@@ -431,7 +432,7 @@ Negative amounts are not treated as noise in this repository.
 
 In the implemented `Recebimentos de Recursos por Favorecido` history:
 
-- `1935520` of `120078492` rows contain negative signed amounts, in every
+- `1935627` of `120093295` rows contain negative signed amounts, in every
   year of the history
 - netted per beneficiary and month, almost all of the negative value sits
   under Treasury cash operations (`treasury_operation`): about
@@ -466,7 +467,7 @@ because the real data shows that `beneficiary_id` alone is not stable enough
 for a beneficiary-level mart. In the implemented file, multiple names can
 appear under the same beneficiary ID.
 
-The cause is confirmed over the full history: all `872795` IDs with more than
+The cause is confirmed over the full history: all `872852` IDs with more than
 one name within a month are masked CPFs such as `***.123.456-**`. The Portal
 hides the first three and last two digits of individual taxpayers' CPFs, so
 different people can share one masked value. No CNPJ (14-digit) identifier has
@@ -482,26 +483,43 @@ collisions. The mart grain is per month, so those renames never split a row.
 
 `beneficiary_identifier_kind` is derived in the dbt staging model from the
 shape of `beneficiary_id`, plus two reviewed seeds, `treasury_bank_codes` for
-`RB` codes and `treasury_management_units` for Treasury management units, and carried through the intermediate and mart layers. It does not
+`RB` codes and `treasury_management_units` for Treasury management units,
+and carried through the intermediate and mart layers. It does not
 change any grain, because it depends only on `beneficiary_id`. Counts below
 cover the full history, `2013-12` to `2026-10`:
 
 | Kind | Rule | Rows | Distinct IDs | Multi-name IDs within a month | IDs renamed across months | Net (R$ trillion) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `cpf_masked` | `***.NNN.NNN-**` | 90642629 | 998529 | 872795 | 990094 | 0.12 |
-| `cnpj` | 14 digits | 28307915 | 600420 | 0 | 4186 | 9.06 |
-| `foreign_code` | `EX` + 7 characters | 478795 | 67236 | 0 | 110 | 0.24 |
-| `placeholder` | negative codes: `-1` and `-8` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 236024 | 5 | 0 | 0 | 0.31 |
-| `treasury_payment` | `RB` + 7 digits, classified in the seed as a payment leaving the government | 26302 | 26 | 0 | 0 | 12.01 |
-| `treasury_operation` | `RB` + 7 digits, classified in the seed as Treasury cash management | 5931 | 18 | 0 | 0 | -18.39 |
-| `treasury_unclassified` | `RB` + 7 digits missing from the seed | 0 | 0 | 0 | 0 | 0 |
+| `cpf_masked` | `***.NNN.NNN-**` | 90653083 | 998531 | 872852 | 990102 | 0.12 |
+| `cnpj` | 14 digits | 28312085 | 600504 | 0 | 4186 | 9.06 |
+| `foreign_code` | `EX` + 7 characters | 478908 | 67246 | 0 | 111 | 0.24 |
+| `management_unit` | other 6-digit SIAFI management unit codes | 356937 | 3905 | 0 | 152 | 1.50 |
+| `placeholder` | negative codes: `-1` and `-8` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 236050 | 5 | 0 | 0 | 0.31 |
+| `treasury_payment` | `RB` + 7 digits, classified in the seed as a payment leaving the government | 26305 | 26 | 0 | 0 | 12.01 |
+| `pf_code` | `PF` or `PS` + 7 characters: people published without a CPF, aggregate grants, and grant reversals | 9725 | 2670 | 0 | 15 | 0.04 |
+| `unregistered_code` | 10 to 12 digits, published only as SEM INFORMACAO or CODIGO INEXISTENTE NO SIAFI | 9218 | 1970 | 0 | 0 | 0.00 |
+| `treasury_operation` | `RB` + 7 digits, classified in the seed as Treasury cash management | 5931 | 18 | 0 | 0 | -18.40 |
+| `treasury_management_unit` | 6-digit Treasury management unit listed in the seed | 2667 | 8 | 0 | 0 | 5.22 |
 | `intergovernmental_transfer` | `TN` + 7 digits | 2386 | 23 | 0 | 0 | 4.35 |
-| `treasury_management_unit` | 6-digit Treasury management unit listed in the seed | 2664 | 8 | 0 | 0 | 5.22 |
-| `other_code` | anything else: mostly 6-digit management unit codes, plus `PF` program codes | 375846 | 8545 | 0 | 167 | 1.55 |
+| `treasury_unclassified` | `RB` + 7 digits missing from the seed | 0 | 0 | 0 | 0 | 0 |
+| `other_code` | any other shape; the dbt test `assert_beneficiary_ids_have_a_known_shape` warns with each one | 0 | 0 | 0 | 0 | 0 |
 
 `placeholder` IDs are not beneficiaries; they label rows where the beneficiary
 is unknown, not applicable, confidential, or a payroll aggregate. Exclude them
 from beneficiary rankings. `-8` appears in only `8` months of the history.
+
+The other codes follow the source's own conventions:
+
+- `management_unit` codes are federal management units receiving money from
+  other units, such as universities, hospitals, and regional offices. They are
+  transfers inside the government, but each one is a real spending unit, so
+  the dashboard keeps them in its default totals.
+- `pf_code` codes stand for people published without a CPF and for grants
+  paid in aggregate (scholarships, student aid). None is located abroad. The
+  `6` `PS` codes hold only reversals of the same grants, R$ -6858 in all.
+- `unregistered_code` codes are never named: `1855` carry SEM INFORMACAO
+  (R$ 32.55 million) and `115` carry CODIGO INEXISTENTE NO SIAFI
+  (R$ 0.66 million).
 
 ## Treasury Codes
 
@@ -531,7 +549,7 @@ beneficiary. They are few rows and most of the money:
   (R$ 2.92 trillion), by the STN itself (R$ 0.75 trillion), and by the ANP
   and other Minas e Energia units (R$ 0.61 trillion); `170600` COORD.GERAL DE
   CONTROLE DA DIVIDA PUBLICA nets R$ 0.79 trillion, almost all paid by itself.
-  Other federal management units stay in `other_code`.
+  Other federal management units are `management_unit`.
 
 An `RB` code missing from the seed is staged as `treasury_unclassified`, and
 the dbt test `assert_treasury_bank_codes_are_classified` warns with its code and
@@ -550,18 +568,18 @@ passes over the full history.
 Observations from the full synced history, `2013-12` to `2026-10`:
 
 - **Flows inside the Treasury hide the totals.** The net signed total over
-  every identifier kind is R$ 14.47 trillion. Leaving out the `18` Treasury
-  cash-operation codes, `5931` rows that net R$ -18.39 trillion, moves it to
+  every identifier kind is R$ 14.46 trillion. Leaving out the `18` Treasury
+  cash-operation codes, `5931` rows that net R$ -18.40 trillion, moves it to
   R$ 32.86 trillion; bond issuance and redemptions of Treasury investments are
   published as negative receipts. Leaving out the `8` Treasury management
-  units too, `2664` rows that net R$ 5.22 trillion, brings it to
+  units too, `2667` rows that net R$ 5.22 trillion, brings it to
   R$ 27.64 trillion.
 - **A handful of codes carry the money.** The `26` Treasury payment codes and
-  `23` `TN` codes, `28688` rows out of 120 million, net R$ 16.36 trillion:
+  `23` `TN` codes, `28691` rows out of 120 million, net R$ 16.36 trillion:
   INSS benefits, payroll, Bolsa Familia, and transfers to states and
   municipalities. Named CNPJ beneficiaries net R$ 9.06 trillion.
 - **Beneficiary identity is unstable only for individuals.** Within a month,
-  `872795` masked CPFs carry more than one name, and no other identifier kind
+  `872852` masked CPFs carry more than one name, and no other identifier kind
   carries any. Across months, `4186` CNPJs change name, which matches company
   renames, not collisions.
 - **Volume is steady, value grows.** Every full year stages 8.2 to 10.4
@@ -576,13 +594,13 @@ Observations from the full synced history, `2013-12` to `2026-10`:
   the sentinel superior body `-1` and body `-3` with an empty body name,
   together R$ 1.61 billion. Staging accepts an empty name only behind a
   sentinel code.
-- **Placeholders are material.** The five placeholder IDs hold `236024` rows
+- **Placeholders are material.** The five placeholder IDs hold `236050` rows
   and R$ 312 billion net; `-1` SEM INFORMACAO alone nets R$ 160 billion.
-- **Negative amounts are routine.** `1935520` rows are negative, in every year.
+- **Negative amounts are routine.** `1935627` rows are negative, in every year.
 
 These findings describe what the source contains. They do not interpret the
 budget behind it. Even without the internal Treasury flows, the totals still
-include transfers between other federal management units under `other_code`
+include transfers between other federal management units under `management_unit`
 (see [Limitations And Future Work](#limitations-and-future-work)).
 
 Rows and net totals by year (2013 holds only December, 2026 ends at the open
@@ -603,7 +621,7 @@ month of October):
 | 2023 | 12 | 9844439 | 2621.6 | 1448.3 | 165732 |
 | 2024 | 12 | 9237291 | 2920.0 | 1952.5 | 78602 |
 | 2025 | 12 | 8228227 | 3172.7 | 2014.3 | 54402 |
-| 2026 | 10 | 5977818 | 2880.1 | 1626.9 | 33977 |
+| 2026 | 10 | 5992621 | 2879.6 | 1614.7 | 34084 |
 
 ## Analytical Examples
 
@@ -849,7 +867,7 @@ What remains provisional:
 > pipeline test. Treat their behavior as provisional.
 
 > Known risk: this path rejects negative `amount_brl` values. The implemented
-> recebimentos source contains real negative amounts (`1935520` rows), so a real
+> recebimentos source contains real negative amounts (`1935627` rows), so a real
 > `Despesas` file with reversals may fail staging. Revisit that rule with a real
 > profile before relying on this path.
 
@@ -1211,15 +1229,16 @@ The same view in the dark theme:
 ## End-To-End Test On A Synthetic Sample
 
 The real source file is not committed, so the full pipeline is also exercised
-on a 17-row synthetic sample:
+on a 20-row synthetic sample:
 
 ```text
 tests/fixtures/recebimentos_sample/202601_RecebimentosRecursosPorFavorecido.csv
 ```
 
 It keeps the official format (latin-1, semicolon delimiter, quoted fields,
-CRLF line endings, `MM/YYYY` months, Brazilian decimals) and covers every
-beneficiary identifier kind, negative amounts, an `EX` / exterior beneficiary,
+CRLF line endings, `MM/YYYY` months, Brazilian decimals) and covers the
+identifier kinds found in the source except `treasury_payment` and
+`intergovernmental_transfer`, negative amounts, an `EX` / exterior beneficiary,
 and one masked-CPF name collision. Beneficiary names and identifiers are
 fictitious. It is pinned by its own manifest, `tests/fixtures/source_manifest.toml`,
 and regenerated with `tests/fixtures/make_recebimentos_sample.py`.
@@ -1244,15 +1263,16 @@ Current limitations are explicit:
   the case study numbers and the dashboard screenshots cover the full history
 - `sync-recebimentos --all` stops when the Portal's WAF challenges the machine,
   so a first full sync may need more than one run
-- a full `dbt build --full-refresh` takes two to three hours and spills to disk
-  under the 6 GB DuckDB cap; daily builds are incremental, but the data tests
-  still scan the full history
+- a full `dbt build --full-refresh` takes about three and a half hours and
+  spills to disk under the 6 GB DuckDB cap; daily builds are incremental, but
+  the data tests still scan the full history, so a build with no changed month
+  still takes about 15 minutes
 - the `RB` classification is read from the published code names and reviewed
   by hand; new codes need the same review when the dbt test warns
 - the Treasury management units are a reviewed list of `8` STN units; leaving
   them and the cash operations out does not remove every transfer inside the
-  government, because `other_code` still holds other federal management units
-  (R$ 1.55 trillion net)
+  government, because the other federal management units (`management_unit`,
+  R$ 1.50 trillion net) stay in the default totals
 - the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
@@ -1261,9 +1281,9 @@ Current limitations are explicit:
 
 Reasonable next steps, without changing the project character:
 
-- separate the other federal management units in `other_code` that receive
-  transfers inside the government
-- over the full history, `4463` CNPJ, foreign, and other-code IDs change name
+- review which `management_unit` flows are transfers inside the government
+  (for example, by matching the paying and the receiving unit)
+- over the full history, `4449` CNPJ, foreign, and management-unit IDs change name
   across months and none within a month; a name history per CNPJ could
   support a reference layer
 - decide whether a separate beneficiary reference layer is justified by repeated evidence

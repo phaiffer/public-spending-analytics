@@ -34,7 +34,7 @@ SAMPLE_CSV = (
     / "recebimentos_sample"
     / "202601_RecebimentosRecursosPorFavorecido.csv"
 )
-SAMPLE_ROW_COUNT = 17
+SAMPLE_ROW_COUNT = 20
 NOW = datetime(2026, 10, 22, 12, 0, tzinfo=UTC)
 
 
