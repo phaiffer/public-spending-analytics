@@ -43,7 +43,11 @@ KIND_LABELS = {
     "cpf_masked": "CPF mascarado (pessoas físicas)",
     "foreign_code": "Favorecido no exterior",
     "placeholder": "Sem identificação ou sigiloso",
+    "treasury_payment": "Pagamentos agregados do Tesouro (benefícios, folha)",
+    "intergovernmental_transfer": "Transferências a estados e municípios",
+    "treasury_unclassified": "Código do Tesouro não classificado",
     "other_code": "Outros códigos (ex.: unidades gestoras)",
+    "treasury_operation": "Operações de caixa do Tesouro (dívida, títulos)",
 }
 COMPLETE_MONTH = "Mês completo"
 OPEN_MONTH = "Mês em andamento (parcial)"
@@ -103,7 +107,7 @@ def render_filters(month_keys: list[int]) -> queries.DashboardFilters | None:
     selected_kinds = st.pills(
         "Tipo de favorecido",
         options=list(KIND_LABELS),
-        default=list(KIND_LABELS),
+        default=list(queries.DEFAULT_IDENTIFIER_KINDS),
         format_func=KIND_LABELS.get,
         selection_mode="multi",
     )
@@ -306,6 +310,14 @@ def render_notes() -> None:
   pessoas, apenas totais.
 - **Sem identificação ou sigiloso:** códigos como SEM INFORMACAO, NAO SE APLICA,
   Sigiloso e FOLHA DE PAGAMENTO, que não identificam um favorecido.
+- **Códigos do Tesouro (RB):** o Portal usa códigos RB no lugar do favorecido em
+  operações do Tesouro, e cada código foi classificado pelo nome publicado.
+  *Pagamentos agregados* saem do governo (benefícios do INSS, folha, Bolsa Família,
+  restituições). *Operações de caixa* ficam dentro dele (dívida pública, emissão de
+  títulos, repasses entre Tesouro e INSS) e movimentam trilhões nos dois sentidos,
+  por isso ficam fora do total até serem selecionadas.
+- **Transferências a estados e municípios (TN):** FPM, FPE, royalties e outras
+  transferências da União aos entes federativos.
 - **Código e metodologia:** [{REPOSITORY_URL.removeprefix("https://")}]({REPOSITORY_URL}).
 """
         )
