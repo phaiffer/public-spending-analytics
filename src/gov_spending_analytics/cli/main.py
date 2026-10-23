@@ -508,8 +508,8 @@ def run_dashboard(
         "--server.port", str(args.port),
         # Local only by default; publishing the page is a deliberate deployment step.
         "--server.address", "localhost",
-        # Without a terminal (background, systemd) skip the browser and first-run prompt.
-        "--server.headless", "false" if sys.stdin.isatty() else "true",
+        # Skip Streamlit's first-run email prompt and browser launch; the URL is printed.
+        "--server.headless", "true",
     ]
     sys.exit(subprocess.run(command, env=environment, check=False).returncode)
 

@@ -1145,6 +1145,9 @@ hours.
 gov-spending dashboard            # http://localhost:8501
 ```
 
+Streamlit runs headless: it prints the URL instead of opening a browser, and
+skips its first-run email prompt.
+
 A Streamlit page over the dbt marts, in Brazilian Portuguese for the public
 audience:
 
