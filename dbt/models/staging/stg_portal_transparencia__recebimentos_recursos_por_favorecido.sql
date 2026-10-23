@@ -12,6 +12,13 @@ treasury_bank_codes as (
 
 ),
 
+treasury_management_units as (
+
+    select beneficiary_id
+    from {{ ref('treasury_management_units') }}
+
+),
+
 typed as (
 
     select
@@ -29,6 +36,8 @@ typed as (
         -- (only 6 middle digits visible), so one masked value can cover several people.
         -- RB codes are Treasury bank operations, classified one by one in the
         -- treasury_bank_codes seed; TN codes are transfers to states and municipalities.
+        -- Treasury management units listed in the treasury_management_units seed keep
+        -- money inside the Treasury and are split out of other_code.
         case
             when regexp_full_match(source.beneficiary_id, '[0-9]{14}') then 'cnpj'
             when regexp_full_match(source.beneficiary_id, '\*\*\*\.[0-9]{3}\.[0-9]{3}-\*\*')
@@ -39,6 +48,8 @@ typed as (
                 then coalesce(treasury_bank_codes.treasury_flow_class, 'treasury_unclassified')
             when regexp_full_match(source.beneficiary_id, 'TN[0-9]{7}')
                 then 'intergovernmental_transfer'
+            when treasury_management_units.beneficiary_id is not null
+                then 'treasury_management_unit'
             else 'other_code'
         end as beneficiary_identifier_kind,
         cast(beneficiary_name as varchar) as beneficiary_name,
@@ -61,6 +72,8 @@ typed as (
     from source
     left join treasury_bank_codes
         on source.beneficiary_id = treasury_bank_codes.beneficiary_id
+    left join treasury_management_units
+        on source.beneficiary_id = treasury_management_units.beneficiary_id
 
 )
 

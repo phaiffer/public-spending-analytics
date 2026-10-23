@@ -34,3 +34,26 @@ seeds:
           - accepted_values:
               arguments:
                 values: ["treasury_operation", "treasury_payment"]
+
+  - name: treasury_management_units
+    description: >
+      Management units (UGs) of the Secretaria do Tesouro Nacional that appear as
+      beneficiaries: the Treasury's cash coordination (CGTES), public debt
+      control, financial assets, state holdings and fiscal operations. Money paid
+      to them stays inside the Treasury and comes almost entirely from other
+      government units, so they are staged as treasury_management_unit instead
+      of other_code.
+    config:
+      column_types:
+        beneficiary_id: varchar
+        source_name: varchar
+    columns:
+      - name: beneficiary_id
+        description: "Six-digit management unit code as published in Código Favorecido."
+        tests:
+          - not_null
+          - unique
+      - name: source_name
+        description: "Name the Portal publishes for the unit, kept for review."
+        tests:
+          - not_null
