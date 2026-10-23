@@ -1208,7 +1208,7 @@ The same view in the dark theme:
 ## End-To-End Test On A Synthetic Sample
 
 The real source file is not committed, so the full pipeline is also exercised
-on a 17-row synthetic sample:
+on a 20-row synthetic sample:
 
 ```text
 tests/fixtures/recebimentos_sample/202601_RecebimentosRecursosPorFavorecido.csv

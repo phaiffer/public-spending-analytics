@@ -39,7 +39,8 @@ typed as (
         -- Treasury management units listed in the treasury_management_units seed keep
         -- money inside the Treasury and are split out of other_code. Other 6-digit
         -- codes are SIAFI management units; PF codes identify people published
-        -- without a CPF and aggregate grants; 10 to 12 digit codes are published
+        -- without a CPF and aggregate grants, and the few PS codes are grant
+        -- reversals of the same kind; 10 to 12 digit codes are published
         -- only as SEM INFORMACAO or CODIGO INEXISTENTE NO SIAFI.
         case
             when regexp_full_match(source.beneficiary_id, '[0-9]{14}') then 'cnpj'
@@ -54,7 +55,7 @@ typed as (
             when treasury_management_units.beneficiary_id is not null
                 then 'treasury_management_unit'
             when regexp_full_match(source.beneficiary_id, '[0-9]{6}') then 'management_unit'
-            when regexp_full_match(source.beneficiary_id, 'PF[A-Z0-9]{7}') then 'pf_code'
+            when regexp_full_match(source.beneficiary_id, 'P[FS][A-Z0-9]{7}') then 'pf_code'
             when regexp_full_match(source.beneficiary_id, '[0-9]{10,12}') then 'unregistered_code'
             else 'other_code'
         end as beneficiary_identifier_kind,

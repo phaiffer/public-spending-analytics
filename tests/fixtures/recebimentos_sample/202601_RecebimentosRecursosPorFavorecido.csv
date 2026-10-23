@@ -17,4 +17,5 @@
 "RB0000001";"BENEFICIARIO FICTICIO RB";"GO";"GOIÂNIA";"26000";"Ministério da Educação";"26000";"Ministério da Educação - Unidades com vínculo direto";"900003";"UNIDADE GESTORA TESTE TRÊS";"01/2026";"123,4500"
 "170500";"UNIDADE FICTICIA DO TESOURO";"DF";"BRASÍLIA";"25000";"Ministério da Fazenda";"25000";"Ministério da Fazenda - Unidades com vínculo direto";"900005";"UNIDADE GESTORA TESTE CINCO";"01/2026";"70000,0000"
 "PFFICT001";"PESQUISADORA FICTICIA NO EXTERIOR";"EX";"Exterior";"26000";"Ministério da Educação";"26000";"Ministério da Educação - Unidades com vínculo direto";"900003";"UNIDADE GESTORA TESTE TRÊS";"01/2026";"2500,0000"
+"PSFICT001";"BOLSA FICTICIA ESTORNADA";"MA";"SÃO LUÍS";"26000";"Ministério da Educação";"26000";"Ministério da Educação - Unidades com vínculo direto";"900003";"UNIDADE GESTORA TESTE TRÊS";"01/2026";"-50,0000"
 "900000000001";"SEM INFORMACAO";"DF";"BRASÍLIA";"25000";"Ministério da Fazenda";"25000";"Ministério da Fazenda - Unidades com vínculo direto";"900005";"UNIDADE GESTORA TESTE CINCO";"01/2026";"10,0000"

@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 SAMPLE_CSV = FIXTURES / "recebimentos_sample" / "202601_RecebimentosRecursosPorFavorecido.csv"
 SAMPLE_MANIFEST = FIXTURES / "source_manifest.toml"
-SAMPLE_ROW_COUNT = 19
+SAMPLE_ROW_COUNT = 20
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +59,7 @@ def test_staging_preserves_every_sample_row(staged_sample: RecebimentosStagingRe
     assert len(staged) == SAMPLE_ROW_COUNT
     assert staged["source_row_number"].tolist() == list(range(1, SAMPLE_ROW_COUNT + 1))
     assert set(staged["source_file_sha256"]) == {staged_sample.source_file_sha256}
-    assert (staged["amount_received_brl"] < 0).sum() == 2
+    assert (staged["amount_received_brl"] < 0).sum() == 3
     assert "Exterior" in set(staged["beneficiary_municipality_name"])
 
 
@@ -141,10 +141,10 @@ def test_dbt_build_over_sample(
         "treasury_operation": 1,
         "treasury_management_unit": 1,
         "management_unit": 1,
-        "pf_code": 1,
+        "pf_code": 2,
         "unregistered_code": 1,
     }
-    assert mart_rows == 17
+    assert mart_rows == 18
     assert multi_name_ids == [("***.111.222-**", "cpf_masked")]
 
 
