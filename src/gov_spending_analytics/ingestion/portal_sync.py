@@ -376,29 +376,15 @@ def sync_month(
 
     version_dir = paths.download_root / month.replace("-", "") / now.strftime("%Y%m%dT%H%M%SZ")
     version_dir.mkdir(parents=True, exist_ok=False)
-    fetched, archive_sha256 = download_archive(remote, version_dir / Path(remote.url).name)
-    csv_path = extract_expected_csv(
-        version_dir / Path(remote.url).name, csv_member_name(month), version_dir
-    )
-    csv_sha256 = file_sha256(csv_path)
-
-    if latest_entry is not None and latest_entry.sha256 == csv_sha256 and staged_path.exists():
-        result = MonthSyncResult(month, "same_content", f"SHA-256 {csv_sha256[:12]} already staged")
-        shutil.rmtree(version_dir)
-    else:
-        entry = register_and_stage(
-            csv_path=csv_path,
-            csv_sha256=csv_sha256,
-            fetched=fetched,
-            archive_sha256=archive_sha256,
-            paths=paths,
-            staged_path=staged_path,
-            now=now,
+    try:
+        result, fetched, archive_sha256 = fetch_and_stage_version(
+            month, remote, version_dir, paths, latest_entry, staged_path, keep_csv, now
         )
-        detail = f"{entry.row_count} rows, SHA-256 {csv_sha256[:12]}"
-        result = MonthSyncResult(month, "staged", detail)
-        if not keep_csv:
-            csv_path.unlink()
+    except Exception:
+        # A failed version is never registered; dropping it keeps daily retries
+        # from piling up hundreds of MB of unregistered archives and CSVs.
+        shutil.rmtree(version_dir, ignore_errors=True)
+        raise
 
     remote_state[month] = {
         "archive_last_modified": fetched.last_modified,
@@ -407,6 +393,43 @@ def sync_month(
         "checked_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     return result
+
+
+def fetch_and_stage_version(
+    month: str,
+    remote: RemoteArchive,
+    version_dir: Path,
+    paths: SyncPaths,
+    latest_entry: SourceFileEntry | None,
+    staged_path: Path,
+    keep_csv: bool,
+    now: datetime,
+) -> tuple[MonthSyncResult, RemoteArchive, str]:
+    """Download one archive into version_dir and stage it unless its CSV is already staged."""
+    fetched, archive_sha256 = download_archive(remote, version_dir / Path(remote.url).name)
+    csv_path = extract_expected_csv(
+        version_dir / Path(remote.url).name, csv_member_name(month), version_dir
+    )
+    csv_sha256 = file_sha256(csv_path)
+
+    if latest_entry is not None and latest_entry.sha256 == csv_sha256 and staged_path.exists():
+        shutil.rmtree(version_dir)
+        detail = f"SHA-256 {csv_sha256[:12]} already staged"
+        return MonthSyncResult(month, "same_content", detail), fetched, archive_sha256
+
+    entry = register_and_stage(
+        csv_path=csv_path,
+        csv_sha256=csv_sha256,
+        fetched=fetched,
+        archive_sha256=archive_sha256,
+        paths=paths,
+        staged_path=staged_path,
+        now=now,
+    )
+    if not keep_csv:
+        csv_path.unlink()
+    detail = f"{entry.row_count} rows, SHA-256 {csv_sha256[:12]}"
+    return MonthSyncResult(month, "staged", detail), fetched, archive_sha256
 
 
 def register_and_stage(

@@ -17,6 +17,7 @@ from gov_spending_analytics.ingestion.source_manifest import (
     resolve_source_file_entry,
 )
 from gov_spending_analytics.quality.basic_checks import (
+    QualityCheckFailure,
     check_required_columns,
     check_source_traceability,
     raise_for_quality_failures,
@@ -64,6 +65,10 @@ REQUIRED_STAGED_COLUMNS = (
     "launch_month",
     "amount_received_brl",
 )
+# The Portal ships some rows with a negative sentinel body code (such as -3,
+# under superior body -1 "Sem informação") and an empty body name, first seen in
+# October 2023. The name may be null only behind such a code.
+SENTINEL_NAMED_COLUMNS = {"government_body_name": "government_body_id"}
 SOURCE_TO_STAGED_COLUMNS = {
     "Código Favorecido": "beneficiary_id",
     "Nome Favorecido": "beneficiary_name",
@@ -315,10 +320,33 @@ def build_empty_staged_frame() -> pd.DataFrame:
 
 def validate_staged_data(staged: pd.DataFrame) -> None:
     """Run lightweight checks before writing staging output."""
+    always_required = [
+        column for column in REQUIRED_STAGED_COLUMNS if column not in SENTINEL_NAMED_COLUMNS
+    ]
     failures = []
-    failures.extend(check_required_columns(staged, REQUIRED_STAGED_COLUMNS))
+    failures.extend(check_required_columns(staged, always_required))
+    failures.extend(check_names_behind_sentinel_ids(staged))
     failures.extend(check_source_traceability(staged, TRACEABILITY_COLUMNS))
     raise_for_quality_failures(failures)
+
+
+def check_names_behind_sentinel_ids(staged: pd.DataFrame) -> list[QualityCheckFailure]:
+    """Allow a null name only where its id is a negative sentinel code such as -3."""
+    failures = []
+    for name_column, id_column in SENTINEL_NAMED_COLUMNS.items():
+        is_sentinel = staged[id_column].fillna("").str.startswith("-")
+        null_count = int((staged[name_column].isna() & ~is_sentinel).sum())
+        if null_count:
+            failures.append(
+                QualityCheckFailure(
+                    check_name="names_behind_sentinel_ids",
+                    message=(
+                        f"Staged column {name_column!r} has {null_count} null values "
+                        f"where {id_column!r} is not a negative sentinel code"
+                    ),
+                )
+            )
+    return failures
 
 
 def parse_launch_month(value: str | None) -> str | None:

@@ -185,6 +185,7 @@ def test_sync_refuses_an_archive_with_unexpected_members(
     assert "2026-01" not in load_remote_state(paths.remote_state_path)
     assert not paths.manifest_path.exists()
     assert not (paths.staging_dir / "202601_RecebimentosRecursosPorFavorecido.parquet").exists()
+    assert not list(paths.download_root.rglob("*.*")), "a failed version leaves no files behind"
 
 
 def test_sync_stops_when_the_server_challenges_the_client(

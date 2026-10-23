@@ -22,29 +22,34 @@ source family:
 
 What is real in the current pipeline:
 
-- one official raw CSV was profiled successfully
-- one real staged Parquet was written
-- one real dbt staging model was connected to DuckDB
-- one conservative intermediate monthly model was built
-- one first mart-ready monthly model was built
-- `dbt build` runs end to end through the dbt CLI (48 nodes: models, seed, and data tests)
+- every monthly archive the Portal publishes, `2013-12` through `2026-10`
+  (`155` months), synced, checked against its CSV row count, and staged to
+  one Parquet file per month
+- one dbt staging view, one intermediate table, and two mart tables over the
+  full history
+- `dbt build` runs end to end through the dbt CLI: `68` nodes (models, seed,
+  and data tests), all passing, in about two hours on a desktop with DuckDB
+  capped at 6 GB
+- a local Streamlit dashboard over the marts (see [Dashboard](#dashboard))
 
-Implemented source facts from the real file:
+Full-history facts (data synced on 2026-10-22; `2026-10` is still open):
 
-- file: `202601_RecebimentosRecursosPorFavorecido.csv`, version retrieved on
-  2026-10-21 and pinned by SHA-256 in `config/source_manifest.toml`
-- profiled rows: `300350`
-- profiled columns: `12`
-- staged rows written: `300350`
-- mart rows at beneficiary-month grain: `233654`
-- negative signed amount rows observed: `1656`
-- beneficiary IDs with more than one beneficiary name in the real source: `13426`,
-  all of them masked CPFs (see [Beneficiary Identifier Kinds](#beneficiary-identifier-kinds))
+| Fact | Value |
+| --- | ---: |
+| Source rows staged | `120078492` |
+| Mart rows at beneficiary-month grain | `103565566` |
+| Rows with a negative signed amount | `1935520` |
+| Distinct beneficiary IDs | `1674810` |
+| Masked CPFs with more than one name in the same month | `872795` |
+| Net signed total, all identifier kinds | R$ 14.47 trillion |
 
-The Portal republished this January 2026 file on 2026-10-10. An earlier,
-unhashed version of the same file had `300391` rows, `1659` negative rows, and
-`233666` mart rows; the screenshots and Excel samples below come from that
-earlier run.
+The net total is not a spending figure. Most of it moves through Treasury
+cash-management codes, and the positive and negative flows behind it are
+several times larger (see [Key Findings](#key-findings)).
+
+The January 2026 file remains the reviewed reference: it is pinned by SHA-256
+in `config/source_manifest.toml` at `300350` rows. The pipeline screenshots and
+the Excel samples below come from that single-month run.
 
 ## Why This Project Matters
 
@@ -298,6 +303,13 @@ Finished running 1 seed, 2 table models, 43 data tests, 2 view models
 Done. PASS=48 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=48
 ```
 
+`dbt build` result over the full history, `155` months (2026-10-22):
+
+```text
+Finished running 1 seed, 4 table models, 62 data tests, 1 view model in 2 hours 4 minutes and 21.22 seconds (7461.22s).
+Done. PASS=68 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=68
+```
+
 ## Intended Analytical Model
 
 The MVP is designed around a future `fact_public_spending` table.
@@ -397,25 +409,30 @@ Geography remains flexible:
 - values such as `EX` are treated as valid source evidence, not data quality failures
 
 Negative amounts are preserved:
-- the real staged file contains `1656` negative signed amount rows
+- the full history contains `1935520` negative signed amount rows
 - forcing a non-negative rule here would destroy observed source behavior
 
 `beneficiary_name` remains in the mart grain:
-- in the current real source, `13426` beneficiary IDs map to more than one beneficiary name
+- over the full history, `872795` beneficiary IDs map to more than one beneficiary name within a month
 - every one of them is a masked CPF, which the Portal publishes with only six digits visible
 - collapsing the mart to month + `beneficiary_id` would merge different people into one row
 
 `source_row_number` is only scoped within `source_file_name`:
-- that is safe for the implemented file
-- it is not advertised as a future global key across all files and months
+- a data test checks it is unique per file across every staged month
+- it is not advertised as a global key across files and months
 
 ## Negative Amounts
 
 Negative amounts are not treated as noise in this repository.
 
-In the implemented `Recebimentos de Recursos por Favorecido` file:
+In the implemented `Recebimentos de Recursos por Favorecido` history:
 
-- `1656` rows contain negative signed amounts
+- `1935520` of `120078492` rows contain negative signed amounts, in every
+  year of the history
+- netted per beneficiary and month, almost all of the negative value sits
+  under Treasury cash-management codes (`other_code`): about R$ 42.6 trillion
+  against R$ 47.3 trillion positive; CNPJ beneficiaries net about
+  R$ 0.02 trillion of negatives
 
 The pipeline therefore keeps `amount_received_brl` signed through staging,
 intermediate, and mart layers. The current implementation does not claim a full
@@ -444,49 +461,101 @@ because the real data shows that `beneficiary_id` alone is not stable enough
 for a beneficiary-level mart. In the implemented file, multiple names can
 appear under the same beneficiary ID.
 
-The cause is now confirmed: all `13426` multi-name IDs are masked CPFs such as
-`***.123.456-**`. The Portal hides the first three and last two digits of
-individual taxpayers' CPFs, so different people can share one masked value.
-No CNPJ (14-digit) identifier has more than one name in this file. The masked
-value plus the name is the best identity the public source offers for
-individuals, and it is still not a guaranteed unique person.
+The cause is confirmed over the full history: all `872795` IDs with more than
+one name within a month are masked CPFs such as `***.123.456-**`. The Portal
+hides the first three and last two digits of individual taxpayers' CPFs, so
+different people can share one masked value. No CNPJ (14-digit) identifier has
+more than one name within a month. The masked value plus the name is the best
+identity the public source offers for individuals, and it is still not a
+guaranteed unique person.
+
+Across months the picture differs: `4186` CNPJs carry a different name in a
+later month, which reads as companies renaming over twelve years, not as
+collisions. The mart grain is per month, so those renames never split a row.
 
 ## Beneficiary Identifier Kinds
 
 `beneficiary_identifier_kind` is derived in the dbt staging model from the
 shape of `beneficiary_id` and carried through the intermediate and mart
 layers. It does not change any grain, because it depends only on
-`beneficiary_id`. Counts below are for the registered `300350`-row version:
+`beneficiary_id`. Counts below cover the full history, `2013-12` to `2026-10`:
 
-| Kind | Rule | Rows | Distinct IDs | Multi-name IDs |
-| --- | --- | ---: | ---: | ---: |
-| `cpf_masked` | `***.NNN.NNN-**` | 159943 | 144309 | 13426 |
-| `cnpj` | 14 digits | 135383 | 71570 | 0 |
-| `foreign_code` | `EX` + 7 characters (2508 of 2526 rows have location `EX`) | 2526 | 2466 | 0 |
-| `other_code` | anything else: mostly 6-digit codes that also appear as management unit IDs, plus `RB`/`TN`/`PF` codes | 1584 | 694 | 0 |
-| `placeholder` | negative codes: `-1` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 914 | 4 | 0 |
+| Kind | Rule | Rows | Distinct IDs | Multi-name IDs within a month | IDs renamed across months | Share of net amount |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `cpf_masked` | `***.NNN.NNN-**` | 90642629 | 998529 | 872795 | 990094 | 0.8% |
+| `cnpj` | 14 digits | 28307915 | 600420 | 0 | 4186 | 62.6% |
+| `foreign_code` | `EX` + 7 characters | 478795 | 67236 | 0 | 110 | 1.7% |
+| `other_code` | anything else: 6-digit codes that also appear as management unit IDs, plus Treasury `RB`/`TN`/`PF` codes | 413129 | 8620 | 0 | 167 | 32.8% |
+| `placeholder` | negative codes: `-1` and `-8` SEM INFORMACAO, `-9` NAO SE APLICA, `-11` Sigiloso, `-13` FOLHA DE PAGAMENTO | 236024 | 5 | 0 | 0 | 2.2% |
 
 `placeholder` IDs are not beneficiaries; they label rows where the beneficiary
 is unknown, not applicable, confidential, or a payroll aggregate. Exclude them
-from beneficiary rankings. The dbt test
-`assert_mart_recebimentos_multi_name_ids_are_masked_cpf` warns if any
-non-`cpf_masked` identifier starts showing name collisions in a future file.
+from beneficiary rankings. `-8` appears in only `8` months of the history.
+
+`other_code` is mostly not beneficiaries either. Its largest codes are Treasury
+cash movements: `RB0000003` PAGAMENTO DA DIVIDA INTERNA, `RB0000011`
+RECEBIMENTO DE EMISSAO DE TITULOS, `RB0000026` RESGATE DE APLIC. DISPONIB. TN,
+`RB0000004` PAGAMENTO DE BENEFICIOS - INSS/FRGPS, and `TN0000001` FUNDOS DE
+PARTICIPACAO - FPM E FPE. Each nets trillions of reais, in both directions.
+
+The dbt test `assert_mart_recebimentos_multi_name_ids_are_masked_cpf` warns if
+any non-`cpf_masked` identifier shows a name collision within a month; it
+passes over the full history.
 
 ## Key Findings
 
-The current case study supports a few concrete observations from the real
-implemented source:
+Observations from the full synced history, `2013-12` to `2026-10`:
 
-- the source is analytically usable, but only after careful typing and monthly normalization
-- beneficiary identity is not fully stable at the ID-only level, and the
-  instability comes entirely from masked CPFs; CNPJ identifiers are stable
-- placeholder IDs (`-1`, `-9`, `-11`, `-13`) concentrate rows that have no
-  identifiable beneficiary and must be excluded from beneficiary rankings
-- negative signed amounts are part of the real source behavior
-- a conservative mart can still be built without inventing unsupported business logic
+- **The headline total is not spending.** The net signed total is
+  R$ 14.47 trillion, but `other_code` Treasury movements (public debt payments
+  and redemptions, bond issuance, INSS and Treasury transfers, FPM/FPE funds)
+  account for 32.8% of it. Their gross flows are about R$ 47.3 trillion in and
+  R$ 42.6 trillion out. Any spending analysis has to filter by identifier kind
+  first; the dashboard exposes that filter.
+- **Beneficiary identity is unstable only for individuals.** Within a month,
+  `872795` masked CPFs carry more than one name, and no other identifier kind
+  carries any. Across months, `4186` CNPJs change name, which matches company
+  renames, not collisions.
+- **Volume is steady, value is not.** Every full year stages 8.2 to 10.4
+  million rows, while the net total grows from R$ 546 billion (2014) to
+  R$ 2.01 trillion (2025), with a dip in 2020 and 2021.
+- **December is the heaviest month.** The largest monthly net totals are
+  December 2025 (R$ 346 billion) and December 2024 (R$ 303 billion).
+- **Social security dominates the bodies.** By superior government body, the
+  Ministério da Previdência Social nets R$ 9.84 trillion, ahead of Saúde
+  (R$ 2.07 trillion) and Educação (R$ 2.07 trillion). These are net totals
+  across all identifier kinds, so they include Treasury movements.
+- **The source format drifts.** From `2023-10` to `2024-03`, `1418` rows carry
+  the sentinel superior body `-1` and body `-3` with an empty body name,
+  together R$ 1.61 billion. Staging accepts an empty name only behind a
+  sentinel code.
+- **Placeholders are material.** The five placeholder IDs hold `236024` rows
+  and R$ 312 billion net; `-1` SEM INFORMACAO alone nets R$ 160 billion.
+- **Negative amounts are routine.** `1935520` rows are negative, in every year.
 
-These are modest findings on purpose. They are grounded in the implemented
-pipeline rather than in a polished narrative detached from the data.
+These findings describe what the source contains. They do not interpret the
+budget behind it, and the net totals mix spending with Treasury cash
+management unless filtered.
+
+Net total and rows by year (all identifier kinds; 2013 holds only December,
+2026 ends at the open month of October):
+
+| Year | Months | Rows | Net total (R$ billion) | Negative rows |
+| --- | ---: | ---: | ---: | ---: |
+| 2013 | 1 | 688 | 0.7 | 605 |
+| 2014 | 12 | 10427371 | 546.5 | 357244 |
+| 2015 | 12 | 9528128 | 575.2 | 154563 |
+| 2016 | 12 | 9788245 | 756.0 | 211451 |
+| 2017 | 12 | 9851812 | 856.1 | 136974 |
+| 2018 | 12 | 9769474 | 983.8 | 121151 |
+| 2019 | 12 | 10158304 | 1111.4 | 128617 |
+| 2020 | 12 | 8407210 | 786.3 | 256493 |
+| 2021 | 12 | 9319620 | 688.0 | 59670 |
+| 2022 | 12 | 9539865 | 1123.5 | 176039 |
+| 2023 | 12 | 9844439 | 1448.3 | 165732 |
+| 2024 | 12 | 9237291 | 1952.5 | 78602 |
+| 2025 | 12 | 8228227 | 2014.3 | 54402 |
+| 2026 | 10 | 5977818 | 1626.9 | 33977 |
 
 ## Analytical Examples
 
@@ -732,7 +801,7 @@ What remains provisional:
 > pipeline test. Treat their behavior as provisional.
 
 > Known risk: this path rejects negative `amount_brl` values. The implemented
-> recebimentos source contains real negative amounts (`1656` rows), so a real
+> recebimentos source contains real negative amounts (`1935520` rows), so a real
 > `Despesas` file with reversals may fail staging. Revisit that rule with a real
 > profile before relying on this path.
 
@@ -937,8 +1006,13 @@ cd dbt
 dbt build --profiles-dir .
 ```
 
-`dbt build` loads the seed, builds the staging and intermediate views and the
-mart tables, and runs every data test. The project var
+`dbt build` loads the seed, builds the staging views and the intermediate and
+mart tables, and runs every data test.
+
+Over the full history (over 100 million rows) DuckDB needs a memory cap. The
+example profile sets `memory_limit: "6GB"`, and DuckDB spills to disk past it.
+A `profiles.yml` copied before that change has no cap: add the `settings`
+block from the example, or systemd-oomd may kill the whole terminal mid-build. The project var
 `recebimentos_staged_parquet` controls the input. It defaults to a glob that
 reads every staged month under
 `data/staging/portal_transparencia/recebimentos_recursos_por_favorecido/`;
@@ -1051,8 +1125,22 @@ audience:
 Charts read `mart_recebimentos_monthly_summary`, a rollup of month x superior
 body x identifier kind that stays small over the full history. Queries use
 short-lived read-only DuckDB connections, so the scheduled sync can rebuild the
-database while the page is open. The page binds to `localhost`; publishing it
-is a separate deployment decision. The light and dark themes follow the viewer.
+database while the page is open. The light and dark themes follow the viewer.
+
+The dashboard is kept local by decision: the page binds to `localhost` and is
+not hosted anywhere. Every identifier kind is selected by default, so the
+headline total includes the Treasury movements under `other_code` (see
+[Key Findings](#key-findings)); clear that kind to look at payments to
+beneficiaries.
+
+The default view, the last 13 months of the synced history (October 2025 to
+the open October 2026), light theme:
+
+<img src="docs/assets/screenshots/08-dashboard-light.png" alt="Dashboard default view, last 13 months, light theme" width="900" />
+
+The same view in the dark theme:
+
+<img src="docs/assets/screenshots/09-dashboard-dark.png" alt="Dashboard default view, last 13 months, dark theme" width="900" />
 
 ## End-To-End Test On A Synthetic Sample
 
@@ -1086,11 +1174,14 @@ with the dependency versions locked in `uv.lock`.
 
 Current limitations are explicit:
 
-- the documented results, screenshots, and Excel samples cover January 2026 only;
-  the pipeline now loads any number of months, but the case study has not been
-  rewritten over the full history
-- `sync-recebimentos --all` needs several polite runs to fetch the full history
-  when the Portal's WAF challenges the machine
+- the pipeline screenshots and the Excel samples still cover January 2026 only;
+  the case study numbers and the dashboard screenshots cover the full history
+- `sync-recebimentos --all` stops when the Portal's WAF challenges the machine,
+  so a first full sync may need more than one run
+- a full `dbt build` takes about two hours and spills to disk under the 6 GB
+  DuckDB cap; it is a batch job, not an interactive one
+- the net totals mix payments to beneficiaries with Treasury cash management;
+  the marts do not separate the two beyond `beneficiary_identifier_kind`
 - the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
@@ -1099,10 +1190,13 @@ Current limitations are explicit:
 
 Reasonable next steps, without changing the project character:
 
-- rewrite the case study over the full synced history
-- with four months loaded, 139 CNPJ and other-code IDs carry more than one name
-  across months (renamed companies) and none within a month; track whether that
-  holds over the full history
+- classify the `RB`/`TN` Treasury codes so spending totals can exclude them
+  without dropping the 6-digit management unit codes in `other_code`
+- over the full history, `4463` CNPJ, foreign, and other-code IDs change name
+  across months and none within a month; a name history per CNPJ could
+  support a reference layer
+- build the dbt intermediate and marts incrementally per month, so the daily
+  sync does not rebuild twelve years of history
 - decide whether a separate beneficiary reference layer is justified by repeated evidence
 - extend the same conservative pattern to additional official source families
 

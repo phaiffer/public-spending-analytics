@@ -26,7 +26,8 @@ models:
       +materialized: view
       +schema: staging
     intermediate:
-      +materialized: view
+      # A table, so the marts and tests downstream aggregate the full history once.
+      +materialized: table
       +schema: intermediate
     marts:
       +materialized: table

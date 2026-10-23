@@ -46,6 +46,9 @@ Type=oneshot
 WorkingDirectory=$repo_dir
 ExecStart=$cli sync-recebimentos $arguments --dbt-build
 Nice=10
+# dbt over the full history is memory heavy; past this cap only this unit is
+# killed, never the desktop session (the profile also caps DuckDB itself).
+MemoryMax=10G
 EOF
 
     cat > "$unit_dir/$name.timer" <<EOF
