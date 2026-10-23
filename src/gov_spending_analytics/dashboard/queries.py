@@ -31,11 +31,15 @@ IDENTIFIER_KINDS = (
     "treasury_unclassified",
     "other_code",
     "treasury_operation",
+    "treasury_management_unit",
 )
 # Treasury cash management (public debt, bond issuance, Treasury and INSS transfers)
-# moves trillions in both directions inside the government, so totals leave it out
-# unless the viewer selects it.
-DEFAULT_IDENTIFIER_KINDS = tuple(kind for kind in IDENTIFIER_KINDS if kind != "treasury_operation")
+# and payments to the Treasury's own management units move trillions inside the
+# government, so totals leave them out unless the viewer selects them.
+INTERNAL_TREASURY_KINDS = ("treasury_operation", "treasury_management_unit")
+DEFAULT_IDENTIFIER_KINDS = tuple(
+    kind for kind in IDENTIFIER_KINDS if kind not in INTERNAL_TREASURY_KINDS
+)
 ORGANIZATION_KINDS = ("cnpj", "foreign_code")
 ORGANIZATION_COLUMNS = [
     "beneficiary_id",

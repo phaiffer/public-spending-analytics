@@ -41,14 +41,15 @@ Full-history facts (data synced on 2026-10-22; `2026-10` is still open):
 | Rows with a negative signed amount | `1935520` |
 | Distinct beneficiary IDs | `1674810` |
 | Masked CPFs with more than one name in the same month | `872795` |
-| Net signed total, Treasury cash operations left out | R$ 32.86 trillion |
+| Net signed total, internal Treasury flows left out | R$ 27.64 trillion |
 | Net signed total, every identifier kind | R$ 14.47 trillion |
 
-The two totals differ because the Portal also publishes Treasury cash
-management (public debt service, bond issuance, Treasury and INSS transfers)
-under `RB` codes, and those operations net R$ -18.39 trillion. The pipeline
-classifies each `RB` code and leaves the cash operations out of the default
-totals (see [Treasury Codes](#treasury-codes)).
+The two totals differ because the Portal also publishes money that stays inside
+the Treasury. Treasury cash management (public debt service, bond issuance,
+Treasury and INSS transfers) appears under `RB` codes and nets
+R$ -18.39 trillion; payments to the Treasury's own management units, such as
+the CGTES cash coordination, net R$ 5.22 trillion. The pipeline classifies both
+and leaves them out of the default totals (see [Treasury Codes](#treasury-codes)).
 
 The January 2026 file remains the reviewed reference: it is pinned by SHA-256
 in `config/source_manifest.toml` at `300350` rows. The pipeline screenshots and
@@ -480,8 +481,8 @@ collisions. The mart grain is per month, so those renames never split a row.
 ## Beneficiary Identifier Kinds
 
 `beneficiary_identifier_kind` is derived in the dbt staging model from the
-shape of `beneficiary_id`, plus the reviewed `treasury_bank_codes` seed for
-`RB` codes, and carried through the intermediate and mart layers. It does not
+shape of `beneficiary_id`, plus two reviewed seeds, `treasury_bank_codes` for
+`RB` codes and `treasury_management_units` for Treasury management units, and carried through the intermediate and mart layers. It does not
 change any grain, because it depends only on `beneficiary_id`. Counts below
 cover the full history, `2013-12` to `2026-10`:
 
@@ -495,7 +496,8 @@ cover the full history, `2013-12` to `2026-10`:
 | `treasury_operation` | `RB` + 7 digits, classified in the seed as Treasury cash management | 5931 | 18 | 0 | 0 | -18.39 |
 | `treasury_unclassified` | `RB` + 7 digits missing from the seed | 0 | 0 | 0 | 0 | 0 |
 | `intergovernmental_transfer` | `TN` + 7 digits | 2386 | 23 | 0 | 0 | 4.35 |
-| `other_code` | anything else: mostly 6-digit management unit codes, plus `PF` program codes | 378510 | 8553 | 0 | 167 | 6.77 |
+| `treasury_management_unit` | 6-digit Treasury management unit listed in the seed | 2664 | 8 | 0 | 0 | 5.22 |
+| `other_code` | anything else: mostly 6-digit management unit codes, plus `PF` program codes | 375846 | 8545 | 0 | 167 | 1.55 |
 
 `placeholder` IDs are not beneficiaries; they label rows where the beneficiary
 is unknown, not applicable, confidential, or a payroll aggregate. Exclude them
@@ -521,14 +523,23 @@ beneficiary. They are few rows and most of the money:
     R$ 0.8 trillion), tax refunds, and contributions to international funds
 - `TN` codes (`intergovernmental_transfer`) are transfers to states and
   municipalities: FPM and FPE, oil royalties, Lei Kandir, CIDE.
+- Treasury management units (`treasury_management_unit`) are the `8`
+  Secretaria do Tesouro Nacional units listed in
+  [`dbt/seeds/treasury_management_units.csv`](dbt/seeds/treasury_management_units.csv).
+  `170500` COORDENACAO-GERAL DE TESOURARIA - CGTES nets R$ 4.27 trillion,
+  mostly paid by the Treasury's own intergovernmental transfers unit
+  (R$ 2.92 trillion), by the STN itself (R$ 0.75 trillion), and by the ANP
+  and other Minas e Energia units (R$ 0.61 trillion); `170600` COORD.GERAL DE
+  CONTROLE DA DIVIDA PUBLICA nets R$ 0.79 trillion, almost all paid by itself.
+  Other federal management units stay in `other_code`.
 
 An `RB` code missing from the seed is staged as `treasury_unclassified`, and
 the dbt test `assert_treasury_bank_codes_are_classified` warns with its code and
 name so it can be reviewed. The classification follows the published names; it
 is a reviewed reading of the source, not an official budget category.
 
-The dashboard leaves `treasury_operation` out of its totals by default; the
-viewer can select it.
+The dashboard leaves `treasury_operation` and `treasury_management_unit` out of
+its totals by default; the viewer can select them.
 
 The dbt test `assert_mart_recebimentos_multi_name_ids_are_masked_cpf` warns if
 any non-`cpf_masked` identifier shows a name collision within a month; it
@@ -538,11 +549,13 @@ passes over the full history.
 
 Observations from the full synced history, `2013-12` to `2026-10`:
 
-- **Treasury cash management hides the totals.** The net signed total over
-  every identifier kind is R$ 14.47 trillion. It moves to R$ 32.86 trillion
-  once the `18` Treasury cash-operation codes, `5931` rows that net
-  R$ -18.39 trillion, are left out. Bond issuance and redemptions of Treasury
-  investments are published as negative receipts.
+- **Flows inside the Treasury hide the totals.** The net signed total over
+  every identifier kind is R$ 14.47 trillion. Leaving out the `18` Treasury
+  cash-operation codes, `5931` rows that net R$ -18.39 trillion, moves it to
+  R$ 32.86 trillion; bond issuance and redemptions of Treasury investments are
+  published as negative receipts. Leaving out the `8` Treasury management
+  units too, `2664` rows that net R$ 5.22 trillion, brings it to
+  R$ 27.64 trillion.
 - **A handful of codes carry the money.** The `26` Treasury payment codes and
   `23` `TN` codes, `28688` rows out of 120 million, net R$ 16.36 trillion:
   INSS benefits, payroll, Bolsa Familia, and transfers to states and
@@ -552,13 +565,13 @@ Observations from the full synced history, `2013-12` to `2026-10`:
   carries any. Across months, `4186` CNPJs change name, which matches company
   renames, not collisions.
 - **Volume is steady, value grows.** Every full year stages 8.2 to 10.4
-  million rows. Without the cash operations, the net total grows every year
-  but one, from R$ 1.61 trillion (2014) to R$ 3.88 trillion (2025); 2020
-  (R$ 2.66 trillion) is above 2021 (R$ 2.45 trillion).
-- **Fazenda and social security lead the bodies.** Without the cash
-  operations, the Ministério da Fazenda nets R$ 10.59 trillion and the
-  Ministério da Previdência Social R$ 9.84 trillion, ahead of Saúde and
-  Educação (R$ 2.07 trillion each).
+  million rows. Without the internal Treasury flows, the net total grows every
+  year but one, from R$ 1.41 trillion (2014) to R$ 3.17 trillion (2025); 2020
+  (R$ 2.29 trillion) is above 2021 (R$ 2.07 trillion).
+- **Social security leads the bodies.** Without the internal Treasury flows,
+  the Ministério da Previdência Social nets R$ 9.84 trillion and the
+  Ministério da Fazenda R$ 6.01 trillion, ahead of Saúde (R$ 2.07 trillion)
+  and Educação (R$ 2.04 trillion).
 - **The source format drifts.** From `2023-10` to `2024-03`, `1418` rows carry
   the sentinel superior body `-1` and body `-3` with an empty body name,
   together R$ 1.61 billion. Staging accepts an empty name only behind a
@@ -568,29 +581,29 @@ Observations from the full synced history, `2013-12` to `2026-10`:
 - **Negative amounts are routine.** `1935520` rows are negative, in every year.
 
 These findings describe what the source contains. They do not interpret the
-budget behind it. Even without the cash operations, the totals still include
-transfers inside the government, such as payments to Treasury management units
-under `other_code` (see [Limitations And Future Work](#limitations-and-future-work)).
+budget behind it. Even without the internal Treasury flows, the totals still
+include transfers between other federal management units under `other_code`
+(see [Limitations And Future Work](#limitations-and-future-work)).
 
 Rows and net totals by year (2013 holds only December, 2026 ends at the open
 month of October):
 
-| Year | Months | Rows | Net, cash operations left out (R$ billion) | Net, every kind (R$ billion) | Negative rows |
+| Year | Months | Rows | Net, internal Treasury flows left out (R$ billion) | Net, every kind (R$ billion) | Negative rows |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 2013 | 1 | 688 | 0.7 | 0.7 | 605 |
-| 2014 | 12 | 10427371 | 1610.5 | 546.5 | 357244 |
-| 2015 | 12 | 9528128 | 1648.3 | 575.2 | 154563 |
-| 2016 | 12 | 9788245 | 1842.9 | 756.0 | 211451 |
-| 2017 | 12 | 9851812 | 1957.4 | 856.1 | 136974 |
-| 2018 | 12 | 9769474 | 1961.0 | 983.8 | 121151 |
-| 2019 | 12 | 10158304 | 2121.4 | 1111.4 | 128617 |
-| 2020 | 12 | 8407210 | 2656.9 | 786.3 | 256493 |
-| 2021 | 12 | 9319620 | 2447.7 | 688.0 | 59670 |
-| 2022 | 12 | 9539865 | 2816.2 | 1123.5 | 176039 |
-| 2023 | 12 | 9844439 | 3086.0 | 1448.3 | 165732 |
-| 2024 | 12 | 9237291 | 3470.7 | 1952.5 | 78602 |
-| 2025 | 12 | 8228227 | 3884.5 | 2014.3 | 54402 |
-| 2026 | 10 | 5977818 | 3351.5 | 1626.9 | 33977 |
+| 2013 | 1 | 688 | 0.0 | 0.7 | 605 |
+| 2014 | 12 | 10427371 | 1407.6 | 546.5 | 357244 |
+| 2015 | 12 | 9528128 | 1420.2 | 575.2 | 154563 |
+| 2016 | 12 | 9788245 | 1497.6 | 756.0 | 211451 |
+| 2017 | 12 | 9851812 | 1591.6 | 856.1 | 136974 |
+| 2018 | 12 | 9769474 | 1630.9 | 983.8 | 121151 |
+| 2019 | 12 | 10158304 | 1795.2 | 1111.4 | 128617 |
+| 2020 | 12 | 8407210 | 2286.6 | 786.3 | 256493 |
+| 2021 | 12 | 9319620 | 2065.6 | 688.0 | 59670 |
+| 2022 | 12 | 9539865 | 2348.9 | 1123.5 | 176039 |
+| 2023 | 12 | 9844439 | 2621.6 | 1448.3 | 165732 |
+| 2024 | 12 | 9237291 | 2920.0 | 1952.5 | 78602 |
+| 2025 | 12 | 8228227 | 3172.7 | 2014.3 | 54402 |
+| 2026 | 10 | 5977818 | 2880.1 | 1626.9 | 33977 |
 
 ## Analytical Examples
 
@@ -1167,9 +1180,11 @@ database while the page is open. The light and dark themes follow the viewer.
 
 The dashboard is kept local by decision: the page binds to `localhost` and is
 not hosted anywhere. Every identifier kind except the Treasury cash
-operations (`treasury_operation`) is selected by default, so the headline total
-leaves out public debt service, bond issuance, and Treasury and INSS transfers
-(see [Treasury Codes](#treasury-codes)); select that kind to include them.
+operations (`treasury_operation`) and the Treasury management units
+(`treasury_management_unit`) is selected by default, so the headline total
+leaves out public debt service, bond issuance, Treasury and INSS transfers,
+and payments to the Treasury's own units (see [Treasury Codes](#treasury-codes));
+select those kinds to include them.
 
 The default view, the last 13 months of the synced history (October 2025 to
 the open October 2026), light theme:
@@ -1183,7 +1198,7 @@ The same view in the dark theme:
 ## End-To-End Test On A Synthetic Sample
 
 The real source file is not committed, so the full pipeline is also exercised
-on a 16-row synthetic sample:
+on a 17-row synthetic sample:
 
 ```text
 tests/fixtures/recebimentos_sample/202601_RecebimentosRecursosPorFavorecido.csv
@@ -1220,10 +1235,10 @@ Current limitations are explicit:
   DuckDB cap; it is a batch job, not an interactive one
 - the `RB` classification is read from the published code names and reviewed
   by hand; new codes need the same review when the dbt test warns
-- leaving out the Treasury cash operations does not remove every transfer
-  inside the government: `other_code` keeps management units such as `170500`
-  COORDENACAO-GERAL DE TESOURARIA - CGTES (R$ 4.27 trillion) and `170600`
-  COORD.GERAL DE CONTROLE DA DIVIDA PUBLICA (R$ 0.79 trillion)
+- the Treasury management units are a reviewed list of `8` STN units; leaving
+  them and the cash operations out does not remove every transfer inside the
+  government, because `other_code` still holds other federal management units
+  (R$ 1.55 trillion net)
 - the dbt CLI does not run on Python 3.14 (upstream import error in `dbt-duckdb`), so the project is pinned to Python 3.11-3.13
 - `beneficiary_id` is not yet a reliable beneficiary master key
 - beneficiary type classification is intentionally deferred
@@ -1232,8 +1247,8 @@ Current limitations are explicit:
 
 Reasonable next steps, without changing the project character:
 
-- separate the federal management units in `other_code` that receive transfers
-  inside the government, starting with the Treasury units
+- separate the other federal management units in `other_code` that receive
+  transfers inside the government
 - over the full history, `4463` CNPJ, foreign, and other-code IDs change name
   across months and none within a month; a name history per CNPJ could
   support a reference layer

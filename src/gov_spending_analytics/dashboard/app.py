@@ -48,6 +48,7 @@ KIND_LABELS = {
     "treasury_unclassified": "Código do Tesouro não classificado",
     "other_code": "Outros códigos (ex.: unidades gestoras)",
     "treasury_operation": "Operações de caixa do Tesouro (dívida, títulos)",
+    "treasury_management_unit": "Unidades gestoras do Tesouro (repasses internos)",
 }
 COMPLETE_MONTH = "Mês completo"
 OPEN_MONTH = "Mês em andamento (parcial)"
@@ -318,6 +319,10 @@ def render_notes() -> None:
   por isso ficam fora do total até serem selecionadas.
 - **Transferências a estados e municípios (TN):** FPM, FPE, royalties e outras
   transferências da União aos entes federativos.
+- **Unidades gestoras do Tesouro:** pagamentos à Coordenação-Geral de Tesouraria
+  (CGTES), ao controle da dívida pública e a outras unidades da Secretaria do Tesouro
+  Nacional. É dinheiro que entra no próprio Tesouro, pago quase todo por outras
+  unidades do governo, por isso também fica fora do total até ser selecionado.
 - **Código e metodologia:** [{REPOSITORY_URL.removeprefix("https://")}]({REPOSITORY_URL}).
 """
         )
