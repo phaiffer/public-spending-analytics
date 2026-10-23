@@ -128,7 +128,8 @@ def test_dbt_build_over_sample(
         "cpf_masked": 4,
         "foreign_code": 2,
         "placeholder": 3,
-        "other_code": 2,
+        "treasury_operation": 1,
+        "other_code": 1,
     }
     assert mart_rows == 14
     assert multi_name_ids == [("***.111.222-**", "cpf_masked")]

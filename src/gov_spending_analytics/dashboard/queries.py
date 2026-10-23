@@ -21,7 +21,21 @@ from gov_spending_analytics.ingestion.portal_sync import (
 
 SUMMARY_TABLE = "main_marts.mart_recebimentos_monthly_summary"
 BENEFICIARY_TABLE = "main_marts.mart_recebimentos_by_beneficiary_month"
-IDENTIFIER_KINDS = ("cnpj", "cpf_masked", "foreign_code", "placeholder", "other_code")
+IDENTIFIER_KINDS = (
+    "cnpj",
+    "cpf_masked",
+    "foreign_code",
+    "placeholder",
+    "treasury_payment",
+    "intergovernmental_transfer",
+    "treasury_unclassified",
+    "other_code",
+    "treasury_operation",
+)
+# Treasury cash management (public debt, bond issuance, Treasury and INSS transfers)
+# moves trillions in both directions inside the government, so totals leave it out
+# unless the viewer selects it.
+DEFAULT_IDENTIFIER_KINDS = tuple(kind for kind in IDENTIFIER_KINDS if kind != "treasury_operation")
 ORGANIZATION_KINDS = ("cnpj", "foreign_code")
 ORGANIZATION_COLUMNS = [
     "beneficiary_id",
@@ -39,7 +53,7 @@ class DashboardFilters:
     start_month_key: int
     end_month_key: int
     superior_body_ids: tuple[str, ...] = ()
-    identifier_kinds: tuple[str, ...] = IDENTIFIER_KINDS
+    identifier_kinds: tuple[str, ...] = DEFAULT_IDENTIFIER_KINDS
 
 
 @dataclass(frozen=True)
