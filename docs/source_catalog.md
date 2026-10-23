@@ -138,7 +138,7 @@ Confirmed first mart layer:
 - Grain: one row per `launch_month_key`, `beneficiary_id`, and `beneficiary_name`
 - Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
 - `beneficiary_name` remains in the mart grain because the real data shows multiple names under the same `beneficiary_id`; all `13426` such IDs are masked CPFs
-- `beneficiary_identifier_kind` classifies IDs as `cnpj`, `cpf_masked`, `foreign_code`, `placeholder`, or `other_code`
+- `beneficiary_identifier_kind` classifies IDs as `cnpj`, `cpf_masked`, `foreign_code`, `placeholder`, `treasury_payment`, `treasury_operation`, `treasury_unclassified`, `intergovernmental_transfer`, `treasury_management_unit`, or `other_code` (see the README section Beneficiary Identifier Kinds)
 - Organizational and geographic attributes remain available in the intermediate layer instead of being forced into the first mart grain
 
 ## MVP Candidate Dataset 1
