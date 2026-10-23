@@ -204,6 +204,12 @@ Confirmed monthly summary mart:
 - Measures: `total_amount_received_brl`, `total_record_count`, and `negative_amount_record_count`
 - Consumer: the Streamlit dashboard, which reads it through short-lived read-only DuckDB connections
 
+Identifier kinds and Treasury codes:
+
+- `beneficiary_identifier_kind` is set in staging from the shape of `beneficiary_id`; `RB` codes are looked up in the reviewed seed `treasury_bank_codes` and become `treasury_operation` (cash management inside the government) or `treasury_payment` (aggregated payments such as INSS benefits and payroll); `TN` codes become `intergovernmental_transfer`
+- An `RB` code missing from the seed is staged as `treasury_unclassified`, and `assert_treasury_bank_codes_are_classified` warns with its code and name
+- The dashboard leaves `treasury_operation` out of its totals by default
+
 ## Intended Flow
 
 ```text
