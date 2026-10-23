@@ -49,6 +49,9 @@ Nice=10
 # dbt over the full history is memory heavy; past this cap only this unit is
 # killed, never the desktop session (the profile also caps DuckDB itself).
 MemoryMax=10G
+# dbt runs tests in parallel and each one opens every staged month plus DuckDB
+# spill files; the default soft limit of 1024 open files fails the build.
+LimitNOFILE=65536
 EOF
 
     cat > "$unit_dir/$name.timer" <<EOF

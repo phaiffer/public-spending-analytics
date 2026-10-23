@@ -27,6 +27,7 @@ models:
       +schema: staging
     intermediate:
       # A table, so the marts and tests downstream aggregate the full history once.
+      # The Recebimentos intermediate and marts override this as incremental by month.
       +materialized: table
       +schema: intermediate
     marts:

@@ -12,7 +12,7 @@ models:
         description: "Event amount in Brazilian reais."
 
   - name: int_recebimentos_recursos_por_favorecido_monthly
-    description: "Conservative monthly aggregation of received resources by beneficiary, government body, management unit, and source location fields."
+    description: "Conservative monthly aggregation of received resources by beneficiary, government body, management unit, and source location fields. Built incrementally: each build rebuilds only the launch months whose staged file or classification seeds changed."
     columns:
       - name: launch_month_key
         description: "Analytical month key formatted as YYYYMM."
@@ -71,5 +71,17 @@ models:
           - not_null
       - name: total_amount_received_brl
         description: "Signed sum of amount_received_brl for the monthly aggregate grain."
+        tests:
+          - not_null
+      - name: source_file_sha256
+        description: "SHA-256 of the staged file the rows came from; incremental builds rebuild a month when its file versions change."
+        tests:
+          - not_null
+      - name: classification_fingerprint
+        description: "MD5 of the classification seeds the row was built with; a seed change rebuilds every month."
+        tests:
+          - not_null
+      - name: built_at
+        description: "When dbt built the launch month; the marts rebuild the months built after them."
         tests:
           - not_null

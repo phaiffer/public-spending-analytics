@@ -63,18 +63,19 @@ def test_staging_preserves_every_sample_row(staged_sample: RecebimentosStagingRe
     assert "Exterior" in set(staged["beneficiary_municipality_name"])
 
 
-def test_dbt_build_over_sample(
-    staged_sample: RecebimentosStagingResult,
-    tmp_path: Path,
-) -> None:
+def require_dbt() -> str:
     dbt = find_dbt_executable()
     if dbt is None:
         if os.environ.get("CI"):
             pytest.fail("dbt CLI is required in CI")
         pytest.skip("dbt CLI is not installed; install the dev extra to run this test")
+    return dbt
 
-    database_path = tmp_path / "sample.duckdb"
-    (tmp_path / "profiles.yml").write_text(
+
+def run_dbt_build(dbt: str, work_dir: Path, staged_parquet: str) -> Path:
+    """Run dbt build into work_dir/sample.duckdb, assert it is clean, return the file."""
+    database_path = work_dir / "sample.duckdb"
+    (work_dir / "profiles.yml").write_text(
         "gov_spending_analytics:\n"
         "  target: dev\n"
         "  outputs:\n"
@@ -84,17 +85,17 @@ def test_dbt_build_over_sample(
         "      threads: 4\n",
         encoding="utf-8",
     )
-    dbt_vars = {"recebimentos_staged_parquet": str(staged_sample.output_path)}
+    dbt_vars = {"recebimentos_staged_parquet": staged_parquet}
     completed = subprocess.run(
         [
             dbt,
             "build",
             "--profiles-dir",
-            str(tmp_path),
+            str(work_dir),
             "--target-path",
-            str(tmp_path / "target"),
+            str(work_dir / "target"),
             "--log-path",
-            str(tmp_path / "logs"),
+            str(work_dir / "logs"),
             "--vars",
             json.dumps(dbt_vars),
         ],
@@ -105,6 +106,15 @@ def test_dbt_build_over_sample(
     )
     assert completed.returncode == 0, completed.stdout[-4000:] + completed.stderr[-4000:]
     assert "WARN=0 ERROR=0" in completed.stdout
+    return database_path
+
+
+def test_dbt_build_over_sample(
+    staged_sample: RecebimentosStagingResult,
+    tmp_path: Path,
+) -> None:
+    dbt = require_dbt()
+    database_path = run_dbt_build(dbt, tmp_path, str(staged_sample.output_path))
 
     with duckdb.connect(str(database_path), read_only=True) as connection:
         kinds = dict(
@@ -134,3 +144,70 @@ def test_dbt_build_over_sample(
     }
     assert mart_rows == 15
     assert multi_name_ids == [("***.111.222-**", "cpf_masked")]
+
+
+INCREMENTAL_MODELS = (
+    "main_intermediate.int_recebimentos_recursos_por_favorecido_monthly",
+    "main_marts.mart_recebimentos_by_beneficiary_month",
+    "main_marts.mart_recebimentos_monthly_summary",
+)
+
+
+def write_month(staged: pd.DataFrame, month: str, directory: Path, **overrides) -> None:
+    """Write the staged sample as another month's staged file, as the sync would."""
+    file_name = f"{month.replace('-', '')}_RecebimentosRecursosPorFavorecido"
+    frame = staged.assign(launch_month=month, source_file_name=f"{file_name}.csv", **overrides)
+    frame.to_parquet(directory / f"{file_name}.parquet", index=False)
+
+
+def built_at_by_month(database_path: Path) -> dict[str, dict[int, object]]:
+    with duckdb.connect(str(database_path), read_only=True) as connection:
+        return {
+            model: dict(
+                connection.execute(
+                    f"select launch_month_key, max(built_at) from {model} group by 1"
+                ).fetchall()
+            )
+            for model in INCREMENTAL_MODELS
+        }
+
+
+def test_incremental_build_rebuilds_only_changed_months(
+    staged_sample: RecebimentosStagingResult,
+    tmp_path: Path,
+) -> None:
+    dbt = require_dbt()
+    staged = pd.read_parquet(staged_sample.output_path)
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+    write_month(staged, "2026-01", staging_dir)
+    write_month(staged, "2026-02", staging_dir)
+    glob = str(staging_dir / "*.parquet")
+
+    database_path = run_dbt_build(dbt, tmp_path, glob)
+    first = built_at_by_month(database_path)
+    assert all(set(months) == {202601, 202602} for months in first.values())
+
+    run_dbt_build(dbt, tmp_path, glob)
+    assert built_at_by_month(database_path) == first, "an unchanged month was rebuilt"
+
+    # The Portal republishes February with one amount doubled.
+    amounts = staged["amount_received_brl"].copy()
+    amounts.iloc[0] *= 2
+    write_month(
+        staged, "2026-02", staging_dir, source_file_sha256="0" * 64, amount_received_brl=amounts
+    )
+    run_dbt_build(dbt, tmp_path, glob)
+    second = built_at_by_month(database_path)
+    for model in INCREMENTAL_MODELS:
+        assert second[model][202601] == first[model][202601], model
+        assert second[model][202602] > first[model][202602], model
+
+    with duckdb.connect(str(database_path), read_only=True) as connection:
+        totals = dict(
+            connection.execute(
+                "select launch_month_key, sum(total_amount_received_brl) "
+                "from main_marts.mart_recebimentos_monthly_summary group by 1"
+            ).fetchall()
+        )
+    assert totals[202602] - totals[202601] == staged["amount_received_brl"].iloc[0]

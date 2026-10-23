@@ -194,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     restage_parser.add_argument(
         "--dbt-build",
         action="store_true",
-        help="Run dbt build after restaging.",
+        help="Run dbt build --full-refresh after restaging.",
     )
 
     dashboard_parser = subparsers.add_parser(
@@ -533,8 +533,10 @@ def run_restage_recebimentos(args: argparse.Namespace, parser: argparse.Argument
     counts = count_by_status(results)
     print("Summary: " + ", ".join(f"{status}={count}" for status, count in sorted(counts.items())))
     if args.dbt_build and counts.get("staged"):
-        print("Running dbt build")
-        if run_dbt_build() != 0:
+        # Restaged months keep their source SHA-256, so an incremental build would
+        # skip them; rebuild every month instead.
+        print("Running dbt build --full-refresh")
+        if run_dbt_build(full_refresh=True) != 0:
             sys.exit("dbt build failed")
     if counts.get("failed"):
         sys.exit(f"{counts['failed']} month(s) failed to restage")
