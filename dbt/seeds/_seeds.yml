@@ -1,0 +1,36 @@
+version: 2
+
+seeds:
+  - name: treasury_bank_codes
+    description: >
+      Reviewed classification of the RB beneficiary codes, the Treasury bank
+      domicile codes the Portal publishes in place of a beneficiary. Each code is
+      classified from its published name: treasury_operation for cash management
+      inside the government (public debt service and bond issuance, Treasury and
+      INSS transfers, sub-account and SPB movements, Banco Central), or
+      treasury_payment for payments that leave the government in aggregate
+      (INSS benefits, payroll, Bolsa Familia through CAIXA, tax refunds,
+      contributions to international funds). RB codes missing here are staged as
+      treasury_unclassified and flagged by assert_treasury_bank_codes_are_classified.
+    config:
+      column_types:
+        beneficiary_id: varchar
+        source_name: varchar
+        treasury_flow_class: varchar
+    columns:
+      - name: beneficiary_id
+        description: "RB code as published in Código Favorecido."
+        tests:
+          - not_null
+          - unique
+      - name: source_name
+        description: "Name the Portal publishes for the code, kept for review."
+        tests:
+          - not_null
+      - name: treasury_flow_class
+        description: "treasury_operation or treasury_payment."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["treasury_operation", "treasury_payment"]

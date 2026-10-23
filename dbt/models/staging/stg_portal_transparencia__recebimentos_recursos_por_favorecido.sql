@@ -5,6 +5,13 @@ with source as (
 
 ),
 
+treasury_bank_codes as (
+
+    select beneficiary_id, treasury_flow_class
+    from {{ ref('treasury_bank_codes') }}
+
+),
+
 typed as (
 
     select
@@ -17,15 +24,21 @@ typed as (
         cast(source_profile_name as varchar) as source_profile_name,
         cast(source_row_number as bigint) as source_row_number,
 
-        cast(beneficiary_id as varchar) as beneficiary_id,
+        cast(source.beneficiary_id as varchar) as beneficiary_id,
         -- Shape of beneficiary_id observed in the source. CPFs are published masked
         -- (only 6 middle digits visible), so one masked value can cover several people.
+        -- RB codes are Treasury bank operations, classified one by one in the
+        -- treasury_bank_codes seed; TN codes are transfers to states and municipalities.
         case
-            when regexp_full_match(beneficiary_id, '[0-9]{14}') then 'cnpj'
-            when regexp_full_match(beneficiary_id, '\*\*\*\.[0-9]{3}\.[0-9]{3}-\*\*')
+            when regexp_full_match(source.beneficiary_id, '[0-9]{14}') then 'cnpj'
+            when regexp_full_match(source.beneficiary_id, '\*\*\*\.[0-9]{3}\.[0-9]{3}-\*\*')
                 then 'cpf_masked'
-            when regexp_full_match(beneficiary_id, 'EX[A-Z0-9]{7}') then 'foreign_code'
-            when regexp_full_match(beneficiary_id, '-[0-9]+') then 'placeholder'
+            when regexp_full_match(source.beneficiary_id, 'EX[A-Z0-9]{7}') then 'foreign_code'
+            when regexp_full_match(source.beneficiary_id, '-[0-9]+') then 'placeholder'
+            when regexp_full_match(source.beneficiary_id, 'RB[0-9]{7}')
+                then coalesce(treasury_bank_codes.treasury_flow_class, 'treasury_unclassified')
+            when regexp_full_match(source.beneficiary_id, 'TN[0-9]{7}')
+                then 'intergovernmental_transfer'
             else 'other_code'
         end as beneficiary_identifier_kind,
         cast(beneficiary_name as varchar) as beneficiary_name,
@@ -46,6 +59,8 @@ typed as (
 
         cast(amount_received_brl as decimal(18, 4)) as amount_received_brl
     from source
+    left join treasury_bank_codes
+        on source.beneficiary_id = treasury_bank_codes.beneficiary_id
 
 )
 
